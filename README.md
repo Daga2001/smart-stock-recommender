@@ -1,6 +1,6 @@
 # 📈 Smart Stock Recommender Project
 
-A full-stack application that retrieves stock information from an external API, stores it in a scalable database, and presents insights through a clean, modern UI.  
+A full-stack application that retrieves stock information from an external API, stores it in a scalable database, and presents insights through a beautiful and interactive UI.  
 The system also provides intelligent stock recommendations to help users identify the best investment opportunities today.  
 
 ---
