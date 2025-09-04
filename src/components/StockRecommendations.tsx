@@ -11,23 +11,31 @@ export const StockRecommendations = ({ stocks }: StockRecommendationsProps) => {
   // Calculate recommendations based on target price increases and buy ratings
   const recommendations = stocks
     .filter(stock => {
-      const hasTargetIncrease = stock.targetTo > stock.targetFrom;
-      const hasBuyRating = stock.ratingTo.toLowerCase().includes('buy') || 
-                          stock.ratingTo.toLowerCase().includes('outperform');
+      const targetTo = parseFloat(stock.target_to.replace('$', ''));
+      const targetFrom = parseFloat(stock.target_from.replace('$', ''));
+      const hasTargetIncrease = targetTo > targetFrom;
+      const hasBuyRating = stock.rating_to.toLowerCase().includes('buy') || 
+                          stock.rating_to.toLowerCase().includes('outperform');
       return hasTargetIncrease || hasBuyRating;
     })
     .sort((a, b) => {
       // Sort by target price increase percentage
-      const aIncrease = ((a.targetTo - a.targetFrom) / a.targetFrom) * 100;
-      const bIncrease = ((b.targetTo - b.targetFrom) / b.targetFrom) * 100;
+      const aTargetTo = parseFloat(a.target_to.replace('$', ''));
+      const aTargetFrom = parseFloat(a.target_from.replace('$', ''));
+      const bTargetTo = parseFloat(b.target_to.replace('$', ''));
+      const bTargetFrom = parseFloat(b.target_from.replace('$', ''));
+      const aIncrease = ((aTargetTo - aTargetFrom) / aTargetFrom) * 100;
+      const bIncrease = ((bTargetTo - bTargetFrom) / bTargetFrom) * 100;
       return bIncrease - aIncrease;
     })
     .slice(0, 3);
 
   const getRecommendationReason = (stock: Stock) => {
-    const targetIncrease = ((stock.targetTo - stock.targetFrom) / stock.targetFrom) * 100;
-    const hasBuyRating = stock.ratingTo.toLowerCase().includes('buy');
-    const hasOutperform = stock.ratingTo.toLowerCase().includes('outperform');
+    const targetTo = parseFloat(stock.target_to.replace('$', ''));
+    const targetFrom = parseFloat(stock.target_from.replace('$', ''));
+    const targetIncrease = ((targetTo - targetFrom) / targetFrom) * 100;
+    const hasBuyRating = stock.rating_to.toLowerCase().includes('buy');
+    const hasOutperform = stock.rating_to.toLowerCase().includes('outperform');
     
     if (targetIncrease > 0) {
       return `Price target boosted ${targetIncrease.toFixed(1)}% - Strong upside potential`;
@@ -84,7 +92,9 @@ export const StockRecommendations = ({ stocks }: StockRecommendationsProps) => {
       
       <div className="grid gap-6 md:grid-cols-3">
         {recommendations.map((stock, index) => {
-          const targetIncrease = ((stock.targetTo - stock.targetFrom) / stock.targetFrom) * 100;
+          const targetTo = parseFloat(stock.target_to.replace('$', ''));
+          const targetFrom = parseFloat(stock.target_from.replace('$', ''));
+          const targetIncrease = ((targetTo - targetFrom) / targetFrom) * 100;
           
           return (
             <Card 
@@ -131,7 +141,7 @@ export const StockRecommendations = ({ stocks }: StockRecommendationsProps) => {
               
               <CardContent className="space-y-4 relative z-10">
                 <div className="flex items-center justify-between">
-                  <StockBadge rating={stock.ratingTo} size="lg" />
+                  <StockBadge rating={stock.rating_to} size="lg" />
                   <div className="text-right">
                     <div className="text-xs text-muted-foreground font-medium">{stock.brokerage}</div>
                     <div className="text-xs text-muted-foreground">{stock.action}</div>
@@ -146,11 +156,11 @@ export const StockRecommendations = ({ stocks }: StockRecommendationsProps) => {
                   <div className="flex items-center justify-between">
                     <div className="flex items-center gap-3">
                       <span className="font-mono text-sm text-muted-foreground line-through">
-                        ${stock.targetFrom.toFixed(2)}
+                        {stock.target_from}
                       </span>
                       <span className="text-muted-foreground">→</span>
                       <span className="font-mono font-bold text-xl text-primary">
-                        ${stock.targetTo.toFixed(2)}
+                        {stock.target_to}
                       </span>
                     </div>
                     {targetIncrease > 0 && (

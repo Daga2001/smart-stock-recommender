@@ -8,9 +8,12 @@ import { TrendingUp, TrendingDown, BarChart3, Users, Activity, DollarSign, Targe
 
 interface StockDashboardProps {
   stocks: Stock[];
+  currentPage: number;
+  onPageChange: (page: number) => void;
+  loading: boolean;
 }
 
-export const StockDashboard = ({ stocks }: StockDashboardProps) => {
+export const StockDashboard = ({ stocks, currentPage, onPageChange, loading }: StockDashboardProps) => {
   const [filters, setFilters] = useState<StockFilters>({
     search: '',
     action: 'all'
@@ -33,15 +36,25 @@ export const StockDashboard = ({ stocks }: StockDashboardProps) => {
   // Calculate statistics
   const stats = useMemo(() => {
     const totalStocks = stocks.length;
-    const targetsRaised = stocks.filter(s => s.targetTo > s.targetFrom).length;
-    const targetsLowered = stocks.filter(s => s.targetTo < s.targetFrom).length;
+    const targetsRaised = stocks.filter(s => {
+      const targetTo = parseFloat(s.target_to.replace('$', ''));
+      const targetFrom = parseFloat(s.target_from.replace('$', ''));
+      return targetTo > targetFrom;
+    }).length;
+    const targetsLowered = stocks.filter(s => {
+      const targetTo = parseFloat(s.target_to.replace('$', ''));
+      const targetFrom = parseFloat(s.target_from.replace('$', ''));
+      return targetTo < targetFrom;
+    }).length;
     const buyRatings = stocks.filter(s => 
-      s.ratingTo.toLowerCase().includes('buy') || 
-      s.ratingTo.toLowerCase().includes('outperform')
+      s.rating_to.toLowerCase().includes('buy') || 
+      s.rating_to.toLowerCase().includes('outperform')
     ).length;
     
     const avgPriceChange = stocks.reduce((sum, stock) => {
-      return sum + ((stock.targetTo - stock.targetFrom) / stock.targetFrom) * 100;
+      const targetTo = parseFloat(stock.target_to.replace('$', ''));
+      const targetFrom = parseFloat(stock.target_from.replace('$', ''));
+      return sum + ((targetTo - targetFrom) / targetFrom) * 100;
     }, 0) / stocks.length;
     
     return {
@@ -209,7 +222,12 @@ export const StockDashboard = ({ stocks }: StockDashboardProps) => {
             </div>
           </div>
           
-          <StockTable stocks={filteredStocks} />
+          <StockTable 
+            stocks={filteredStocks} 
+            currentPage={currentPage}
+            onPageChange={onPageChange}
+            loading={loading}
+          />
         </div>
       </div>
     </div>

@@ -1,14 +1,17 @@
 import { useState } from 'react';
 import { Stock, SortField, SortDirection } from '../types/stock';
 import { StockBadge } from './StockBadge';
-import { ArrowUpDown, ArrowUp, ArrowDown, TrendingUp, TrendingDown, Zap, Eye } from 'lucide-react';
+import { ArrowUpDown, ArrowUp, ArrowDown, TrendingUp, TrendingDown, Zap, Eye, ChevronLeft, ChevronRight } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 
 interface StockTableProps {
   stocks: Stock[];
+  currentPage: number;
+  onPageChange: (page: number) => void;
+  loading: boolean;
 }
 
-export const StockTable = ({ stocks }: StockTableProps) => {
+export const StockTable = ({ stocks, currentPage, onPageChange, loading }: StockTableProps) => {
   const [sortField, setSortField] = useState<SortField>('ticker');
   const [sortDirection, setSortDirection] = useState<SortDirection>('asc');
   const [hoveredRow, setHoveredRow] = useState<string | null>(null);
@@ -45,20 +48,45 @@ export const StockTable = ({ stocks }: StockTableProps) => {
       <ArrowDown className="ml-2 h-4 w-4 text-primary" />;
   };
 
-  const getTargetTrend = (from: number, to: number) => {
-    if (to > from) return <TrendingUp className="h-4 w-4 text-success animate-pulse" />;
-    if (to < from) return <TrendingDown className="h-4 w-4 text-destructive animate-pulse" />;
+  const getTargetTrend = (from: string, to: string) => {
+    const fromNum = parseFloat(from.replace('$', ''));
+    const toNum = parseFloat(to.replace('$', ''));
+    if (toNum > fromNum) return <TrendingUp className="h-4 w-4 text-success animate-pulse" />;
+    if (toNum < fromNum) return <TrendingDown className="h-4 w-4 text-destructive animate-pulse" />;
     return <Zap className="h-4 w-4 text-muted-foreground" />;
   };
 
   const getRowBg = (stock: Stock) => {
-    if (stock.targetTo > stock.targetFrom) return 'hover:bg-success/5';
-    if (stock.targetTo < stock.targetFrom) return 'hover:bg-destructive/5';
+    const targetTo = parseFloat(stock.target_to.replace('$', ''));
+    const targetFrom = parseFloat(stock.target_from.replace('$', ''));
+    if (targetTo > targetFrom) return 'hover:bg-success/5';
+    if (targetTo < targetFrom) return 'hover:bg-destructive/5';
     return 'hover:bg-muted/30';
   };
 
   return (
     <div className="glass-card border border-border/50 overflow-hidden animate-fade-in">
+      <div className="flex items-center justify-center p-4 border-b border-border/30">
+        <div className="flex items-center gap-2">
+          <Button 
+            onClick={() => onPageChange(currentPage - 1)} 
+            disabled={currentPage === 1 || loading}
+            variant="outline" 
+            size="sm"
+          >
+            <ChevronLeft className="h-4 w-4" />
+          </Button>
+          <span className="px-4 py-2 text-sm font-medium">{currentPage}</span>
+          <Button 
+            onClick={() => onPageChange(currentPage + 1)} 
+            disabled={loading}
+            variant="outline" 
+            size="sm"
+          >
+            <ChevronRight className="h-4 w-4" />
+          </Button>
+        </div>
+      </div>
       <div className="overflow-x-auto">
         <table className="w-full">
           <thead>
@@ -102,11 +130,11 @@ export const StockTable = ({ stocks }: StockTableProps) => {
               <th className="h-14 px-6 text-left align-middle font-semibold text-foreground">
                 <Button 
                   variant="ghost" 
-                  onClick={() => handleSort('targetFrom')}
+                  onClick={() => handleSort('target_from')}
                   className="h-auto p-0 font-semibold hover:bg-transparent hover:text-primary transition-colors duration-200"
                 >
                   Target Price
-                  <SortIcon field="targetFrom" />
+                  <SortIcon field="target_from" />
                 </Button>
               </th>
             </tr>
@@ -137,7 +165,7 @@ export const StockTable = ({ stocks }: StockTableProps) => {
                         <div className="absolute -bottom-1 left-0 right-0 h-0.5 bg-primary rounded-full animate-scale-in" />
                       )}
                     </div>
-                    {stock.targetTo > stock.targetFrom && (
+                    {parseFloat(stock.target_to.replace('$', '')) > parseFloat(stock.target_from.replace('$', '')) && (
                       <div className="w-2 h-2 bg-success rounded-full animate-pulse" />
                     )}
                   </div>
@@ -160,11 +188,11 @@ export const StockTable = ({ stocks }: StockTableProps) => {
                 </td>
                 <td className="h-16 px-6 align-middle">
                   <div className="flex items-center gap-2">
-                    <StockBadge rating={stock.ratingFrom} />
-                    {stock.ratingFrom !== stock.ratingTo && (
+                    <StockBadge rating={stock.rating_from} />
+                    {stock.rating_from !== stock.rating_to && (
                       <>
                         <span className="text-muted-foreground animate-pulse">→</span>
-                        <StockBadge rating={stock.ratingTo} />
+                        <StockBadge rating={stock.rating_to} />
                       </>
                     )}
                   </div>
@@ -172,22 +200,22 @@ export const StockTable = ({ stocks }: StockTableProps) => {
                 <td className="h-16 px-6 align-middle">
                   <div className="flex items-center gap-2">
                     <span className="font-mono text-sm text-muted-foreground">
-                      ${stock.targetFrom.toFixed(2)}
+                      {stock.target_from}
                     </span>
-                    {stock.targetFrom !== stock.targetTo && (
+                    {stock.target_from !== stock.target_to && (
                       <>
                         <span className="text-muted-foreground">→</span>
                         <span className="font-mono font-bold text-lg">
-                          ${stock.targetTo.toFixed(2)}
+                          {stock.target_to}
                         </span>
-                        {getTargetTrend(stock.targetFrom, stock.targetTo)}
+                        {getTargetTrend(stock.target_from, stock.target_to)}
                         <span className={`text-xs font-semibold px-2 py-1 rounded-full ${
-                          stock.targetTo > stock.targetFrom 
+                          parseFloat(stock.target_to.replace('$', '')) > parseFloat(stock.target_from.replace('$', '')) 
                             ? 'bg-success/20 text-success' 
                             : 'bg-destructive/20 text-destructive'
                         }`}>
-                          {stock.targetTo > stock.targetFrom ? '+' : ''}
-                          {(((stock.targetTo - stock.targetFrom) / stock.targetFrom) * 100).toFixed(1)}%
+                          {parseFloat(stock.target_to.replace('$', '')) > parseFloat(stock.target_from.replace('$', '')) ? '+' : ''}
+                          {(((parseFloat(stock.target_to.replace('$', '')) - parseFloat(stock.target_from.replace('$', ''))) / parseFloat(stock.target_from.replace('$', ''))) * 100).toFixed(1)}%
                         </span>
                       </>
                     )}

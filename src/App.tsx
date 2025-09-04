@@ -8,6 +8,7 @@ import NotFound from "./pages/NotFound";
 
 const queryClient = new QueryClient();
 
+// Create a client, which will be used to provide React Query context to the app.
 const App = () => (
   <QueryClientProvider client={queryClient}>
     <TooltipProvider>
