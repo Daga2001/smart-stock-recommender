@@ -52,6 +52,34 @@ export default {
 					DEFAULT: 'hsl(var(--card))',
 					foreground: 'hsl(var(--card-foreground))'
 				},
+				success: {
+					DEFAULT: 'hsl(var(--success))',
+					foreground: 'hsl(var(--success-foreground))'
+				},
+				warning: {
+					DEFAULT: 'hsl(var(--warning))',
+					foreground: 'hsl(var(--warning-foreground))'
+				},
+				neutral: {
+					DEFAULT: 'hsl(var(--neutral))',
+					foreground: 'hsl(var(--neutral-foreground))'
+				},
+				buy: {
+					DEFAULT: 'hsl(var(--buy))',
+					foreground: 'hsl(var(--buy-foreground))'
+				},
+				outperform: {
+					DEFAULT: 'hsl(var(--outperform))',
+					foreground: 'hsl(var(--outperform-foreground))'
+				},
+				hold: {
+					DEFAULT: 'hsl(var(--hold))',
+					foreground: 'hsl(var(--hold-foreground))'
+				},
+				underweight: {
+					DEFAULT: 'hsl(var(--underweight))',
+					foreground: 'hsl(var(--underweight-foreground))'
+				},
 				sidebar: {
 					DEFAULT: 'hsl(var(--sidebar-background))',
 					foreground: 'hsl(var(--sidebar-foreground))',
