@@ -49,7 +49,67 @@ The system also provides intelligent stock recommendations to help users identif
 
 ### Installation
 
-1. **Clone the repository**
+1. **📂 Clone the repository**
    ```bash
    git clone https://github.com/your-username/smart-stock-recommender.git
    cd smart-stock-recommender
+   cd smart-stock-recommender
+   ```
+
+2. **🖥️ Setup backend (Go)**
+   ```bash
+   cd backend
+   go mod tidy
+   go run main.go
+   ```
+
+3. **🌐 Setup frontend (React + Vite)**
+   ```bash
+   cd frontend
+   npm install
+   npm run dev
+   ```
+   
+4.**🗄️ Database (CockroachDB)**
+
+- Start a local CockroachDB instance  
+- Apply migrations (SQL files located in `/migrations`)  
+
+---
+
+## 📡 API Endpoints (Backend)
+
+- `GET /api/stocks` – fetch all stock data  
+- `GET /api/stocks/:ticker` – fetch details for a specific stock  
+- `GET /api/recommendations` – fetch recommended stocks  
+
+---
+
+## 🎯 Roadmap
+
+- [ ] Implement caching for API requests  
+- [ ] Add authentication for UI users  
+- [ ] Enhance recommendation algorithm with external data sources  
+- [ ] Deploy to cloud (Render / Vercel / Fly.io)  
+
+---
+
+## 🧑‍💻 Developer Notes
+
+- Keep API keys and credentials **out of version control**.  
+- Follow clean coding practices (linting, formatting, modular code).  
+- Write unit tests for critical logic (backend + frontend).  
+
+---
+
+## 📜 License
+
+This project is open-source and available under the [MIT License](LICENSE).  
+
+---
+
+## 🙌 Acknowledgments
+
+Special thanks to the reviewers and interviewers for this challenge.  
+This project was built as part of a technical assessment and continues to evolve with improvements.  
+
