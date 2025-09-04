@@ -13,7 +13,7 @@ interface StockDashboardProps {
 export const StockDashboard = ({ stocks }: StockDashboardProps) => {
   const [filters, setFilters] = useState<StockFilters>({
     search: '',
-    action: ''
+    action: 'all'
   });
 
   const filteredStocks = useMemo(() => {
@@ -24,7 +24,7 @@ export const StockDashboard = ({ stocks }: StockDashboardProps) => {
         stock.company.toLowerCase().includes(searchLower) ||
         stock.brokerage.toLowerCase().includes(searchLower);
       
-      const matchesAction = !filters.action || stock.action === filters.action;
+      const matchesAction = filters.action === 'all' || !filters.action || stock.action === filters.action;
       
       return matchesSearch && matchesAction;
     });

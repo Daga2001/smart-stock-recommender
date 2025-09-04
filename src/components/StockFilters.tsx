@@ -31,7 +31,7 @@ export const StockFilters = ({ filters, onFiltersChange }: StockFiltersProps) =>
             <SelectValue placeholder="Filter by action" />
           </SelectTrigger>
           <SelectContent>
-            <SelectItem value="">All Actions</SelectItem>
+            <SelectItem value="all">All Actions</SelectItem>
             <SelectItem value="initiated by">Initiated</SelectItem>
             <SelectItem value="target raised by">Target Raised</SelectItem>
             <SelectItem value="target lowered by">Target Lowered</SelectItem>
