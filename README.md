@@ -99,6 +99,7 @@ The system also provides intelligent stock recommendations to help users identif
    VITE_STOCK_API_TOKEN=your-external-api-token
    ```
    
+   Run the server:
    ```bash
    npm run dev
    ```
