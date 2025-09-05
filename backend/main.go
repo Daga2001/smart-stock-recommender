@@ -1,3 +1,8 @@
+// @title Smart Stock Recommender API
+// @version 1.0
+// @description API for fetching and managing stock ratings data
+// @host localhost:8081
+// @BasePath /api
 package main
 
 import (
@@ -6,8 +11,11 @@ import (
 	"os"
 	"smart-stock-recommender/database"
 	"smart-stock-recommender/handlers"
+	_ "smart-stock-recommender/docs"
 	"github.com/gin-gonic/gin"
 	"github.com/joho/godotenv"
+	ginSwagger "github.com/swaggo/gin-swagger"
+	swaggerFiles "github.com/swaggo/files"
 )
 
 // main is the entry point of the application.
@@ -48,10 +56,14 @@ func main() {
 		c.Next()
 	})
 
+	// Swagger documentation route
+	r.GET("/swagger/*any", ginSwagger.WrapHandler(swaggerFiles.Handler))
+
 	// API Routes from the Go Server
 	api := r.Group("/api")
 	{
 		api.POST("/stocks", stockHandler.GetStocksByPage)
+		api.POST("/stocks/bulk", stockHandler.GetStocksBulk)
 	}
 
 	// define the port to run the server on

@@ -8,7 +8,7 @@ package models
 import "time"
 
 // Stock represents a stock rating entry.
-type stock_ratings struct {
+type StockRatings struct {
 	ID         int       `json:"id" db:"id"`
 	Ticker     string    `json:"ticker" db:"ticker"`
 	TargetFrom string    `json:"target_from" db:"target_from"`
@@ -24,11 +24,16 @@ type stock_ratings struct {
 
 // ApiResponse represents the response from the external stock API.
 type ApiResponse struct {
-	Items    []stock_ratings `json:"items"`
-	NextPage string  `json:"next_page"`
+	Items    []StockRatings `json:"items"`
+	NextPage string         `json:"next_page"`
 }
 
 // PageRequest represents the expected structure of the pagination request.
 type PageRequest struct {
 	Page int `json:"page" binding:"required"`
+}
+
+type BulkPageRequest struct {
+	StartPage int `json:"start_page" binding:"required"`
+	EndPage   int `json:"end_page" binding:"required"`
 }

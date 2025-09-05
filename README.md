@@ -9,11 +9,14 @@ The system also provides intelligent stock recommendations to help users identif
 
 - 🔗 **External API Integration** – Securely connects to the stock data API with proper authentication and error handling.  
 - 🗄️ **Reliable Data Storage** – Persists data in CockroachDB for scalability and fault tolerance.  
-- ⚡ **Backend API in Go** – Exposes stock data and recommendations via REST endpoints.  
+- ⚡ **High-Performance Backend** – Go server with parallel processing and optimized database operations.  
+- 🚀 **Parallel Data Fetching** – Concurrent API calls with rate limiting and retry logic for maximum efficiency.  
+- 📝 **Interactive API Documentation** – Auto-generated Swagger docs with try-it-out functionality.  
 - 🎨 **Interactive UI** – Built with Vue 3, TypeScript, Pinia, and styled with Tailwind CSS.  
 - 🔍 **Search & Filter** – Quickly find stocks by ticker, company, or brokerage.  
 - 📊 **Sorting Options** – Sort by rating, target price, or analyst action.  
 - 🤖 **Recommendation Engine** – Analyzes stock performance trends and suggests top picks.  
+- 🔒 **SQL Injection Protection** – Parameterized queries and input validation for security.  
 - 🧪 **Unit Testing** – Ensures stability and reliability of backend and UI logic.  
 
 ---
@@ -29,7 +32,8 @@ The system also provides intelligent stock recommendations to help users identif
 **Backend**
 - [Golang](https://go.dev/) – high-performance, statically typed backend  
 - [Gin](https://gin-gonic.com/) – HTTP web framework  
-- RESTful API design  
+- [Swagger](https://swagger.io/) – API documentation and testing  
+- RESTful API design with parallel processing  
 
 **Database**
 - [CockroachDB](https://www.cockroachlabs.com/product/cockroachdb/) – distributed, resilient SQL database  
@@ -57,6 +61,7 @@ The system also provides intelligent stock recommendations to help users identif
    ```
 
 2. **🖥️ Setup backend (Go)**
+  Navigate to backend repository and install dependencies:
    ```bash
    cd backend
    go mod tidy
@@ -89,6 +94,7 @@ The system also provides intelligent stock recommendations to help users identif
    ```
 
 3. **🌐 Setup frontend (Vue 3)**
+  Navigate to frontend repository and install dependencies:
    ```bash
    cd frontend
    npm install
@@ -114,41 +120,76 @@ The system also provides intelligent stock recommendations to help users identif
 
 **Base URL:** `http://localhost:8081`
 
-### `POST /api/stocks`
+### 📚 **Interactive API Documentation**
+Visit **http://localhost:8081/swagger/index.html** for complete interactive API documentation with:
+- All available endpoints
+- Request/response examples
+- Model schemas
+- Try-it-out functionality
+
+### **Key Endpoints:**
+
+#### `POST /api/stocks`
 Fetch stock data by page number from external API and store in database.
-
-**Request:**
-- **URL:** `http://localhost:8081/api/stocks`
-- **Method:** `POST`
-- **Headers:** `Content-Type: application/json`
 - **Body:** `{"page": 1}`
+- **Features:** Single page fetch with retry logic
 
-**Response:**
-```json
-{
-  "items": [
-    {
-      "ticker": "CECO",
-      "target_from": "$44.00",
-      "target_to": "$52.00",
-      "company": "CECO Environmental",
-      "action": "target raised by",
-      "brokerage": "Needham & Company LLC",
-      "rating_from": "Buy",
-      "rating_to": "Buy",
-      "time": "2025-08-22T00:30:05.141533767Z"
-    }
-  ],
-  "next_page": "CECO"
-}
-```
+#### `POST /api/stocks/bulk` 🚀
+Fetch stock data for multiple pages with **parallel processing**.
+- **Body:** `{"start_page": 1, "end_page": 22}`
+- **Features:** 
+  - **Parallel API calls** (up to 20 concurrent requests)
+  - **Automatic retry logic** for empty pages
+  - **Batch database inserts** for optimal performance
+  - **Rate limiting** to prevent API overload
+  - **Database clearing** before bulk insert
 
-**cURL Example:**
+**Quick Test:**
 ```bash
 curl -X POST http://localhost:8081/api/stocks \
   -H "Content-Type: application/json" \
   -d '{"page": 1}'
 ```
+
+---
+
+---
+
+## 📝 Swagger Documentation
+
+### **Accessing API Documentation**
+Visit **http://localhost:8081/swagger/index.html** for interactive API documentation.
+
+### **Adding Documentation for New Endpoints**
+
+1. **Add Swagger annotations** to your handler functions:
+```go
+// @Summary Your endpoint description
+// @Description Detailed description of what the endpoint does
+// @Tags your-tag
+// @Accept json
+// @Produce json
+// @Param request body YourModel true "Request description"
+// @Success 200 {object} YourResponse
+// @Failure 400 {object} map[string]string
+// @Router /your-endpoint [post]
+func (h *YourHandler) YourEndpoint(c *gin.Context) {
+    // Your implementation
+}
+```
+
+2. **Generate documentation**:
+```bash
+cd backend
+swag init
+```
+
+3. **Restart server** - documentation updates automatically!
+
+### **Swagger Dependencies**
+- `github.com/swaggo/gin-swagger` - Gin integration
+- `github.com/swaggo/files` - Static files
+- `github.com/swaggo/swag` - Documentation generator
 
 ---
 
@@ -177,6 +218,10 @@ curl -X POST http://localhost:8081/api/stocks \
 
 ## 🎯 Roadmap
 
+- [x] **Parallel API Processing** – Implemented concurrent requests with rate limiting
+- [x] **Swagger Documentation** – Auto-generated interactive API docs
+- [x] **SQL Injection Protection** – Parameterized queries and input validation
+- [x] **Hot Reload Development** – Air tool for automatic server restarts
 - [ ] Implement caching for API requests  
 - [ ] Add authentication for UI users  
 - [ ] Enhance recommendation algorithm with external data sources  

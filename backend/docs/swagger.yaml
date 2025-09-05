@@ -1,0 +1,132 @@
+basePath: /api
+definitions:
+  models.ApiResponse:
+    properties:
+      items:
+        items:
+          $ref: '#/definitions/models.StockRatings'
+        type: array
+      next_page:
+        type: string
+    type: object
+  models.BulkPageRequest:
+    properties:
+      end_page:
+        type: integer
+      start_page:
+        type: integer
+    required:
+    - end_page
+    - start_page
+    type: object
+  models.PageRequest:
+    properties:
+      page:
+        type: integer
+    required:
+    - page
+    type: object
+  models.StockRatings:
+    properties:
+      action:
+        type: string
+      brokerage:
+        type: string
+      company:
+        type: string
+      created_at:
+        type: string
+      id:
+        type: integer
+      rating_from:
+        type: string
+      rating_to:
+        type: string
+      target_from:
+        type: string
+      target_to:
+        type: string
+      ticker:
+        type: string
+      time:
+        type: string
+    type: object
+host: localhost:8081
+info:
+  contact: {}
+  description: API for fetching and managing stock ratings data
+  title: Smart Stock Recommender API
+  version: "1.0"
+paths:
+  /stocks:
+    post:
+      consumes:
+      - application/json
+      description: Retrieves stock data from external API for a specific page and
+        stores in database
+      parameters:
+      - description: Page number to fetch
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/models.PageRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/models.ApiResponse'
+        "400":
+          description: Bad Request
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "500":
+          description: Internal Server Error
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      summary: Fetch stocks by page number
+      tags:
+      - stocks
+  /stocks/bulk:
+    post:
+      consumes:
+      - application/json
+      description: Retrieves stock data from external API for a range of pages, clears
+        existing data first
+      parameters:
+      - description: Page range to fetch
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/models.BulkPageRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties: true
+            type: object
+        "400":
+          description: Bad Request
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "500":
+          description: Internal Server Error
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      summary: Fetch stocks in bulk for page range
+      tags:
+      - stocks
+swagger: "2.0"
