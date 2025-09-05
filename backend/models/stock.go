@@ -1,8 +1,14 @@
 package models
 
+/*
+	Models define the structure of the data used in the application,
+	such as Stock and ApiResponse.
+*/
+
 import "time"
 
-type Stock struct {
+// Stock represents a stock rating entry.
+type stock_ratings struct {
 	ID         int       `json:"id" db:"id"`
 	Ticker     string    `json:"ticker" db:"ticker"`
 	TargetFrom string    `json:"target_from" db:"target_from"`
@@ -16,11 +22,13 @@ type Stock struct {
 	CreatedAt  time.Time `json:"created_at" db:"created_at"`
 }
 
+// ApiResponse represents the response from the external stock API.
 type ApiResponse struct {
-	Items    []Stock `json:"items"`
+	Items    []stock_ratings `json:"items"`
 	NextPage string  `json:"next_page"`
 }
 
+// PageRequest represents the expected structure of the pagination request.
 type PageRequest struct {
 	Page int `json:"page" binding:"required"`
 }

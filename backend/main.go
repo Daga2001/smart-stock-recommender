@@ -10,6 +10,7 @@ import (
 	"github.com/joho/godotenv"
 )
 
+// main is the entry point of the application.
 func main() {
 	// Load environment variables
 	if err := godotenv.Load(); err != nil {
@@ -59,12 +60,14 @@ func main() {
 		port = "8081"
 	}
 
+	// Start server
 	log.Printf("Server starting on port %s", port)
 	r.Run(":" + port)
 }
 
 // createTables creates the necessary tables in the database if they do not exist.
 func createTables(db *sql.DB) {
+	// Query to create stock_ratings table
 	query := `
 	CREATE TABLE IF NOT EXISTS stock_ratings (
 		id SERIAL PRIMARY KEY,
@@ -81,6 +84,7 @@ func createTables(db *sql.DB) {
 		UNIQUE(ticker, time)
 	)`
 
+	// Execute the query
 	if _, err := db.Exec(query); err != nil {
 		log.Fatal("Failed to create table:", err)
 	}
