@@ -33,7 +33,7 @@ export const StockFilters = ({ filters, onFiltersChange }: StockFiltersProps) =>
             <Sparkles className="h-5 w-5 text-primary" />
           </div>
           <div>
-            <h3 className="font-semibold text-lg">Smart Filters</h3>
+            <h3 className="font-semibold text-lg">Filters</h3>
             <p className="text-sm text-muted-foreground">Refine your search with precision</p>
           </div>
         </div>

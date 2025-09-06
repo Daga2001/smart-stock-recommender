@@ -17,6 +17,7 @@ interface StockDashboardProps {
   loading: boolean;
   pageLength?: number;
   onPageLengthChange?: (length: number) => void;
+  onRefresh?: () => void;
   totalPages?: number;
   totalRecords?: number;
 }
@@ -35,6 +36,7 @@ export const StockDashboard = ({
   loading, 
   pageLength = 20,
   onPageLengthChange,
+  onRefresh,
   totalPages = 1,
   totalRecords = 0
 }: StockDashboardProps) => {
@@ -49,7 +51,10 @@ export const StockDashboard = ({
       const matchesSearch = !filters.search || 
         (stock.ticker && stock.ticker.toLowerCase().includes(searchLower)) ||
         (stock.company && stock.company.toLowerCase().includes(searchLower)) ||
-        (stock.brokerage && stock.brokerage.toLowerCase().includes(searchLower));
+        (stock.brokerage && stock.brokerage.toLowerCase().includes(searchLower)) ||
+        (stock.action && stock.action.toLowerCase().includes(searchLower)) ||
+        (stock.rating_from && stock.rating_from.toLowerCase().includes(searchLower)) ||
+        (stock.rating_to && stock.rating_to.toLowerCase().includes(searchLower));
       
       const matchesAction = filters.action === 'all' || !filters.action || stock.action === filters.action;
       
@@ -282,6 +287,14 @@ export const StockDashboard = ({
                     <option value={100}>100 per page</option>
                   </select>
                 </div>
+                
+                <button
+                  onClick={onRefresh}
+                  disabled={loading}
+                  className="px-4 py-2 glass-card border border-border/50 rounded-lg text-sm font-medium bg-primary/10 hover:bg-primary/20 text-primary focus:ring-2 focus:ring-primary/50 focus:border-primary transition-all duration-200 hover:shadow-premium disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  {loading ? 'Loading...' : 'Refresh'}
+                </button>
               </div>
               
               <div className="text-sm text-muted-foreground font-medium">

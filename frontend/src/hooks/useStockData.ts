@@ -37,10 +37,18 @@ export const useStockData = (initialPageNumber = 1, initialPageLength = 20) => {
     }
   };
 
-  // Fetch data when pagination parameters change
+  // Fetch data on initial load
   useEffect(() => {
     fetchStockData();
-  }, [pageNumber, pageLength]);
+  }, []);
+
+  // Auto-refresh when page length changes to update pagination metadata
+  useEffect(() => {
+    // Skip the initial render, but refresh on any subsequent pageLength change
+    if (pagination !== null) {
+      fetchStockData();
+    }
+  }, [pageLength]);
 
   const handlePageNumberChange = (newPageNumber: number) => {
     setPageNumber(newPageNumber);
@@ -49,6 +57,10 @@ export const useStockData = (initialPageNumber = 1, initialPageLength = 20) => {
   const handlePageLengthChange = (newPageLength: number) => {
     setPageNumber(1); // Reset to first page when changing page length
     setPageLength(newPageLength);
+  };
+
+  const handleRefresh = () => {
+    fetchStockData();
   };
 
   return {
@@ -60,6 +72,7 @@ export const useStockData = (initialPageNumber = 1, initialPageLength = 20) => {
     pageLength,
     handlePageNumberChange,
     handlePageLengthChange,
+    handleRefresh,
     refetch: fetchStockData,
   };
 };
