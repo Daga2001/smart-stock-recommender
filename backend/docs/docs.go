@@ -17,7 +17,7 @@ const docTemplate = `{
     "paths": {
         "/stocks": {
             "post": {
-                "description": "Retrieves stock data from external API for a specific page and stores in database",
+                "description": "Retrieves stock data from external API for a specific page and stores in database. Returns the raw API response with stock items and next page token.",
                 "consumes": [
                     "application/json"
                 ],
@@ -30,7 +30,7 @@ const docTemplate = `{
                 "summary": "Fetch stocks by page number",
                 "parameters": [
                     {
-                        "description": "Page number to fetch",
+                        "description": "Request body with page number (integer, required)",
                         "name": "request",
                         "in": "body",
                         "required": true,
@@ -41,27 +41,21 @@ const docTemplate = `{
                 ],
                 "responses": {
                     "200": {
-                        "description": "OK",
+                        "description": "Successfully fetched stock data from external API",
                         "schema": {
                             "$ref": "#/definitions/models.ApiResponse"
                         }
                     },
                     "400": {
-                        "description": "Bad Request",
+                        "description": "Bad request - invalid JSON format, missing page field, or invalid page number",
                         "schema": {
-                            "type": "object",
-                            "additionalProperties": {
-                                "type": "string"
-                            }
+                            "$ref": "#/definitions/models.ErrorResponse"
                         }
                     },
                     "500": {
-                        "description": "Internal Server Error",
+                        "description": "Internal server error occurred",
                         "schema": {
-                            "type": "object",
-                            "additionalProperties": {
-                                "type": "string"
-                            }
+                            "$ref": "#/definitions/models.GenericErrorResponse"
                         }
                     }
                 }
@@ -69,7 +63,7 @@ const docTemplate = `{
         },
         "/stocks/bulk": {
             "post": {
-                "description": "Retrieves stock data from external API for a range of pages, clears existing data first",
+                "description": "Clears existing database data, then fetches stock data from external API for a range of pages using parallel processing. Returns summary statistics of the operation.",
                 "consumes": [
                     "application/json"
                 ],
@@ -79,10 +73,10 @@ const docTemplate = `{
                 "tags": [
                     "stocks"
                 ],
-                "summary": "Fetch stocks in bulk for page range",
+                "summary": "Fetch stocks in bulk for page range with parallel processing",
                 "parameters": [
                     {
-                        "description": "Page range to fetch",
+                        "description": "Request body with start_page and end_page (integers, both required, max range 1,000,000)",
                         "name": "request",
                         "in": "body",
                         "required": true,
@@ -93,28 +87,93 @@ const docTemplate = `{
                 ],
                 "responses": {
                     "200": {
-                        "description": "OK",
+                        "description": "Successfully processed bulk stock data fetch with parallel processing",
                         "schema": {
-                            "type": "object",
-                            "additionalProperties": true
+                            "$ref": "#/definitions/models.BulkResponse"
                         }
                     },
                     "400": {
-                        "description": "Bad Request",
+                        "description": "Bad request - invalid JSON, negative pages, start \u003e end, or range too large",
                         "schema": {
-                            "type": "object",
-                            "additionalProperties": {
-                                "type": "string"
-                            }
+                            "$ref": "#/definitions/models.ErrorResponse"
                         }
                     },
                     "500": {
-                        "description": "Internal Server Error",
+                        "description": "Internal server error occurred",
                         "schema": {
-                            "type": "object",
-                            "additionalProperties": {
-                                "type": "string"
-                            }
+                            "$ref": "#/definitions/models.GenericErrorResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/stocks/list": {
+            "post": {
+                "description": "Retrieves stored stock ratings with pagination support, ordered by creation date (newest first). Returns both data and pagination metadata.",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "stocks"
+                ],
+                "summary": "Get paginated stock ratings from database",
+                "parameters": [
+                    {
+                        "description": "Request body with page_number (integer, min 1) and page_length (integer, 1-1000)",
+                        "name": "request",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/models.PaginationRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Successfully retrieved paginated stock ratings with metadata",
+                        "schema": {
+                            "$ref": "#/definitions/models.PaginatedResponse"
+                        }
+                    },
+                    "400": {
+                        "description": "Bad request - invalid JSON, page_number \u003c= 0, or page_length not between 1-1000",
+                        "schema": {
+                            "$ref": "#/definitions/models.ErrorResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal server error occurred",
+                        "schema": {
+                            "$ref": "#/definitions/models.GenericErrorResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/stocks/metrics": {
+            "get": {
+                "description": "Analyzes all stored stock ratings using parallel processing to provide comprehensive market insights including sentiment analysis, target price changes, rating distributions, top brokerages, most active stocks, and recent activity trends.",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "analytics"
+                ],
+                "summary": "Get comprehensive stock market analytics and metrics",
+                "responses": {
+                    "200": {
+                        "description": "Successfully calculated comprehensive market metrics and analytics",
+                        "schema": {
+                            "$ref": "#/definitions/models.MetricsResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal server error occurred",
+                        "schema": {
+                            "$ref": "#/definitions/models.GenericErrorResponse"
                         }
                     }
                 }
@@ -122,6 +181,23 @@ const docTemplate = `{
         }
     },
     "definitions": {
+        "models.ActiveStock": {
+            "type": "object",
+            "properties": {
+                "company": {
+                    "type": "string",
+                    "example": "Apple Inc."
+                },
+                "rating_count": {
+                    "type": "integer",
+                    "example": 25
+                },
+                "ticker": {
+                    "type": "string",
+                    "example": "AAPL"
+                }
+            }
+        },
         "models.ApiResponse": {
             "type": "object",
             "properties": {
@@ -136,6 +212,19 @@ const docTemplate = `{
                 }
             }
         },
+        "models.BrokerageActivity": {
+            "type": "object",
+            "properties": {
+                "activity": {
+                    "type": "integer",
+                    "example": 150
+                },
+                "name": {
+                    "type": "string",
+                    "example": "Goldman Sachs"
+                }
+            }
+        },
         "models.BulkPageRequest": {
             "type": "object",
             "required": [
@@ -144,10 +233,139 @@ const docTemplate = `{
             ],
             "properties": {
                 "end_page": {
-                    "type": "integer"
+                    "type": "integer",
+                    "example": 100
                 },
                 "start_page": {
-                    "type": "integer"
+                    "type": "integer",
+                    "example": 1
+                }
+            }
+        },
+        "models.BulkResponse": {
+            "type": "object",
+            "properties": {
+                "message": {
+                    "type": "string",
+                    "example": "Successfully fetched and stored stock data"
+                },
+                "pages_fetched": {
+                    "type": "string",
+                    "example": "1-1000"
+                },
+                "stocks": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/models.StockRatings"
+                    }
+                },
+                "total_stocks": {
+                    "type": "integer",
+                    "example": 7860
+                }
+            }
+        },
+        "models.ErrorResponse": {
+            "type": "object",
+            "properties": {
+                "error": {
+                    "type": "string",
+                    "example": "Invalid JSON format in request body"
+                }
+            }
+        },
+        "models.GenericErrorResponse": {
+            "type": "object",
+            "properties": {
+                "error": {
+                    "type": "string",
+                    "example": "Internal server error occurred"
+                }
+            }
+        },
+        "models.MarketSentiment": {
+            "type": "object",
+            "properties": {
+                "bearish_count": {
+                    "type": "integer",
+                    "example": 600
+                },
+                "bearish_percentage": {
+                    "type": "number",
+                    "example": 23.8
+                },
+                "bullish_count": {
+                    "type": "integer",
+                    "example": 1400
+                },
+                "bullish_percentage": {
+                    "type": "number",
+                    "example": 55.6
+                },
+                "neutral_count": {
+                    "type": "integer",
+                    "example": 520
+                },
+                "neutral_percentage": {
+                    "type": "number",
+                    "example": 20.6
+                }
+            }
+        },
+        "models.MetricsData": {
+            "type": "object",
+            "properties": {
+                "description": {
+                    "type": "string",
+                    "example": "Comprehensive stock market analytics based on analyst ratings and target price changes"
+                },
+                "generated_at": {
+                    "type": "string",
+                    "example": "2025-01-15T10:30:00Z"
+                },
+                "market_sentiment": {
+                    "$ref": "#/definitions/models.MarketSentiment"
+                },
+                "most_active_stocks": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/models.ActiveStock"
+                    }
+                },
+                "rating_distribution": {
+                    "type": "object",
+                    "additionalProperties": {
+                        "type": "integer"
+                    }
+                },
+                "recent_activity": {
+                    "type": "integer",
+                    "example": 125
+                },
+                "target_changes": {
+                    "$ref": "#/definitions/models.TargetChanges"
+                },
+                "top_brokerages": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/models.BrokerageActivity"
+                    }
+                },
+                "total_records": {
+                    "type": "integer",
+                    "example": 2520
+                }
+            }
+        },
+        "models.MetricsResponse": {
+            "type": "object",
+            "properties": {
+                "metrics": {
+                    "$ref": "#/definitions/models.MetricsData"
+                },
+                "success": {
+                    "type": "boolean",
+                    "example": true
                 }
             }
         },
@@ -158,7 +376,68 @@ const docTemplate = `{
             ],
             "properties": {
                 "page": {
-                    "type": "integer"
+                    "type": "integer",
+                    "example": 1
+                }
+            }
+        },
+        "models.PaginatedResponse": {
+            "type": "object",
+            "properties": {
+                "data": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/models.StockRatings"
+                    }
+                },
+                "pagination": {
+                    "$ref": "#/definitions/models.PaginationMeta"
+                }
+            }
+        },
+        "models.PaginationMeta": {
+            "type": "object",
+            "properties": {
+                "has_next": {
+                    "type": "boolean",
+                    "example": true
+                },
+                "has_previous": {
+                    "type": "boolean",
+                    "example": false
+                },
+                "page_length": {
+                    "type": "integer",
+                    "example": 20
+                },
+                "page_number": {
+                    "type": "integer",
+                    "example": 1
+                },
+                "total_pages": {
+                    "type": "integer",
+                    "example": 126
+                },
+                "total_records": {
+                    "type": "integer",
+                    "example": 2520
+                }
+            }
+        },
+        "models.PaginationRequest": {
+            "type": "object",
+            "required": [
+                "page_length",
+                "page_number"
+            ],
+            "properties": {
+                "page_length": {
+                    "type": "integer",
+                    "example": 20
+                },
+                "page_number": {
+                    "type": "integer",
+                    "example": 1
                 }
             }
         },
@@ -166,37 +445,65 @@ const docTemplate = `{
             "type": "object",
             "properties": {
                 "action": {
-                    "type": "string"
+                    "type": "string",
+                    "example": "target raised by"
                 },
                 "brokerage": {
-                    "type": "string"
+                    "type": "string",
+                    "example": "Goldman Sachs"
                 },
                 "company": {
-                    "type": "string"
+                    "type": "string",
+                    "example": "Apple Inc."
                 },
                 "created_at": {
-                    "type": "string"
+                    "type": "string",
+                    "example": "2025-01-15T10:35:00Z"
                 },
                 "id": {
-                    "type": "integer"
+                    "type": "integer",
+                    "example": 1
                 },
                 "rating_from": {
-                    "type": "string"
+                    "type": "string",
+                    "example": "Buy"
                 },
                 "rating_to": {
-                    "type": "string"
+                    "type": "string",
+                    "example": "Strong Buy"
                 },
                 "target_from": {
-                    "type": "string"
+                    "type": "string",
+                    "example": "$150.00"
                 },
                 "target_to": {
-                    "type": "string"
+                    "type": "string",
+                    "example": "$180.00"
                 },
                 "ticker": {
-                    "type": "string"
+                    "type": "string",
+                    "example": "AAPL"
                 },
                 "time": {
-                    "type": "string"
+                    "type": "string",
+                    "example": "2025-01-15T10:30:00Z"
+                }
+            }
+        },
+        "models.TargetChanges": {
+            "type": "object",
+            "properties": {
+                "lowered": {
+                    "type": "integer",
+                    "example": 800
+                },
+                "maintained": {
+                    "type": "integer",
+                    "example": 520
+                },
+                "raised": {
+                    "type": "integer",
+                    "example": 1200
                 }
             }
         }

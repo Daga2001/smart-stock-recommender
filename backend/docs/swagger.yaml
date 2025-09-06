@@ -1,5 +1,17 @@
 basePath: /api
 definitions:
+  models.ActiveStock:
+    properties:
+      company:
+        example: Apple Inc.
+        type: string
+      rating_count:
+        example: 25
+        type: integer
+      ticker:
+        example: AAPL
+        type: string
+    type: object
   models.ApiResponse:
     properties:
       items:
@@ -9,47 +21,213 @@ definitions:
       next_page:
         type: string
     type: object
+  models.BrokerageActivity:
+    properties:
+      activity:
+        example: 150
+        type: integer
+      name:
+        example: Goldman Sachs
+        type: string
+    type: object
   models.BulkPageRequest:
     properties:
       end_page:
+        example: 100
         type: integer
       start_page:
+        example: 1
         type: integer
     required:
     - end_page
     - start_page
     type: object
+  models.BulkResponse:
+    properties:
+      message:
+        example: Successfully fetched and stored stock data
+        type: string
+      pages_fetched:
+        example: 1-1000
+        type: string
+      stocks:
+        items:
+          $ref: '#/definitions/models.StockRatings'
+        type: array
+      total_stocks:
+        example: 7860
+        type: integer
+    type: object
+  models.ErrorResponse:
+    properties:
+      error:
+        example: Invalid JSON format in request body
+        type: string
+    type: object
+  models.GenericErrorResponse:
+    properties:
+      error:
+        example: Internal server error occurred
+        type: string
+    type: object
+  models.MarketSentiment:
+    properties:
+      bearish_count:
+        example: 600
+        type: integer
+      bearish_percentage:
+        example: 23.8
+        type: number
+      bullish_count:
+        example: 1400
+        type: integer
+      bullish_percentage:
+        example: 55.6
+        type: number
+      neutral_count:
+        example: 520
+        type: integer
+      neutral_percentage:
+        example: 20.6
+        type: number
+    type: object
+  models.MetricsData:
+    properties:
+      description:
+        example: Comprehensive stock market analytics based on analyst ratings and
+          target price changes
+        type: string
+      generated_at:
+        example: "2025-01-15T10:30:00Z"
+        type: string
+      market_sentiment:
+        $ref: '#/definitions/models.MarketSentiment'
+      most_active_stocks:
+        items:
+          $ref: '#/definitions/models.ActiveStock'
+        type: array
+      rating_distribution:
+        additionalProperties:
+          type: integer
+        type: object
+      recent_activity:
+        example: 125
+        type: integer
+      target_changes:
+        $ref: '#/definitions/models.TargetChanges'
+      top_brokerages:
+        items:
+          $ref: '#/definitions/models.BrokerageActivity'
+        type: array
+      total_records:
+        example: 2520
+        type: integer
+    type: object
+  models.MetricsResponse:
+    properties:
+      metrics:
+        $ref: '#/definitions/models.MetricsData'
+      success:
+        example: true
+        type: boolean
+    type: object
   models.PageRequest:
     properties:
       page:
+        example: 1
         type: integer
     required:
     - page
     type: object
+  models.PaginatedResponse:
+    properties:
+      data:
+        items:
+          $ref: '#/definitions/models.StockRatings'
+        type: array
+      pagination:
+        $ref: '#/definitions/models.PaginationMeta'
+    type: object
+  models.PaginationMeta:
+    properties:
+      has_next:
+        example: true
+        type: boolean
+      has_previous:
+        example: false
+        type: boolean
+      page_length:
+        example: 20
+        type: integer
+      page_number:
+        example: 1
+        type: integer
+      total_pages:
+        example: 126
+        type: integer
+      total_records:
+        example: 2520
+        type: integer
+    type: object
+  models.PaginationRequest:
+    properties:
+      page_length:
+        example: 20
+        type: integer
+      page_number:
+        example: 1
+        type: integer
+    required:
+    - page_length
+    - page_number
+    type: object
   models.StockRatings:
     properties:
       action:
+        example: target raised by
         type: string
       brokerage:
+        example: Goldman Sachs
         type: string
       company:
+        example: Apple Inc.
         type: string
       created_at:
+        example: "2025-01-15T10:35:00Z"
         type: string
       id:
+        example: 1
         type: integer
       rating_from:
+        example: Buy
         type: string
       rating_to:
+        example: Strong Buy
         type: string
       target_from:
+        example: $150.00
         type: string
       target_to:
+        example: $180.00
         type: string
       ticker:
+        example: AAPL
         type: string
       time:
+        example: "2025-01-15T10:30:00Z"
         type: string
+    type: object
+  models.TargetChanges:
+    properties:
+      lowered:
+        example: 800
+        type: integer
+      maintained:
+        example: 520
+        type: integer
+      raised:
+        example: 1200
+        type: integer
     type: object
 host: localhost:8081
 info:
@@ -63,9 +241,10 @@ paths:
       consumes:
       - application/json
       description: Retrieves stock data from external API for a specific page and
-        stores in database
+        stores in database. Returns the raw API response with stock items and next
+        page token.
       parameters:
-      - description: Page number to fetch
+      - description: Request body with page number (integer, required)
         in: body
         name: request
         required: true
@@ -75,21 +254,18 @@ paths:
       - application/json
       responses:
         "200":
-          description: OK
+          description: Successfully fetched stock data from external API
           schema:
             $ref: '#/definitions/models.ApiResponse'
         "400":
-          description: Bad Request
+          description: Bad request - invalid JSON format, missing page field, or invalid
+            page number
           schema:
-            additionalProperties:
-              type: string
-            type: object
+            $ref: '#/definitions/models.ErrorResponse'
         "500":
-          description: Internal Server Error
+          description: Internal server error occurred
           schema:
-            additionalProperties:
-              type: string
-            type: object
+            $ref: '#/definitions/models.GenericErrorResponse'
       summary: Fetch stocks by page number
       tags:
       - stocks
@@ -97,10 +273,12 @@ paths:
     post:
       consumes:
       - application/json
-      description: Retrieves stock data from external API for a range of pages, clears
-        existing data first
+      description: Clears existing database data, then fetches stock data from external
+        API for a range of pages using parallel processing. Returns summary statistics
+        of the operation.
       parameters:
-      - description: Page range to fetch
+      - description: Request body with start_page and end_page (integers, both required,
+          max range 1,000,000)
         in: body
         name: request
         required: true
@@ -110,23 +288,73 @@ paths:
       - application/json
       responses:
         "200":
-          description: OK
+          description: Successfully processed bulk stock data fetch with parallel
+            processing
           schema:
-            additionalProperties: true
-            type: object
+            $ref: '#/definitions/models.BulkResponse'
         "400":
-          description: Bad Request
+          description: Bad request - invalid JSON, negative pages, start > end, or
+            range too large
           schema:
-            additionalProperties:
-              type: string
-            type: object
+            $ref: '#/definitions/models.ErrorResponse'
         "500":
-          description: Internal Server Error
+          description: Internal server error occurred
           schema:
-            additionalProperties:
-              type: string
-            type: object
-      summary: Fetch stocks in bulk for page range
+            $ref: '#/definitions/models.GenericErrorResponse'
+      summary: Fetch stocks in bulk for page range with parallel processing
       tags:
       - stocks
+  /stocks/list:
+    post:
+      consumes:
+      - application/json
+      description: Retrieves stored stock ratings with pagination support, ordered
+        by creation date (newest first). Returns both data and pagination metadata.
+      parameters:
+      - description: Request body with page_number (integer, min 1) and page_length
+          (integer, 1-1000)
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/models.PaginationRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Successfully retrieved paginated stock ratings with metadata
+          schema:
+            $ref: '#/definitions/models.PaginatedResponse'
+        "400":
+          description: Bad request - invalid JSON, page_number <= 0, or page_length
+            not between 1-1000
+          schema:
+            $ref: '#/definitions/models.ErrorResponse'
+        "500":
+          description: Internal server error occurred
+          schema:
+            $ref: '#/definitions/models.GenericErrorResponse'
+      summary: Get paginated stock ratings from database
+      tags:
+      - stocks
+  /stocks/metrics:
+    get:
+      description: Analyzes all stored stock ratings using parallel processing to
+        provide comprehensive market insights including sentiment analysis, target
+        price changes, rating distributions, top brokerages, most active stocks, and
+        recent activity trends.
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Successfully calculated comprehensive market metrics and analytics
+          schema:
+            $ref: '#/definitions/models.MetricsResponse'
+        "500":
+          description: Internal server error occurred
+          schema:
+            $ref: '#/definitions/models.GenericErrorResponse'
+      summary: Get comprehensive stock market analytics and metrics
+      tags:
+      - analytics
 swagger: "2.0"

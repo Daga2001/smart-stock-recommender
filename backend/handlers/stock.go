@@ -31,14 +31,14 @@ func NewStockHandler(db *sql.DB) *StockHandler {
 
 // GetStocksByPage fetches stock data from external API for a single page
 // @Summary Fetch stocks by page number
-// @Description Retrieves stock data from external API for a specific page and stores in database
+// @Description Retrieves stock data from external API for a specific page and stores in database. Returns the raw API response with stock items and next page token.
 // @Tags stocks
 // @Accept json
 // @Produce json
-// @Param request body models.PageRequest true "Page number to fetch"
-// @Success 200 {object} models.ApiResponse
-// @Failure 400 {object} map[string]string
-// @Failure 500 {object} map[string]string
+// @Param request body models.PageRequest true "Request body with page number (integer, required)"
+// @Success 200 {object} models.ApiResponse "Successfully fetched stock data from external API"
+// @Failure 400 {object} models.ErrorResponse "Bad request - invalid JSON format, missing page field, or invalid page number"
+// @Failure 500 {object} models.GenericErrorResponse "Internal server error occurred"
 // @Router /stocks [post]
 func (h *StockHandler) GetStocksByPage(c *gin.Context) {
 	// Parse JSON from request body
@@ -110,15 +110,15 @@ func (h *StockHandler) GetStocksByPage(c *gin.Context) {
 }
 
 // GetStocksBulk fetches stock data from external API for multiple pages
-// @Summary Fetch stocks in bulk for page range
-// @Description Retrieves stock data from external API for a range of pages, clears existing data first
+// @Summary Fetch stocks in bulk for page range with parallel processing
+// @Description Clears existing database data, then fetches stock data from external API for a range of pages using parallel processing. Returns summary statistics of the operation.
 // @Tags stocks
 // @Accept json
 // @Produce json
-// @Param request body models.BulkPageRequest true "Page range to fetch"
-// @Success 200 {object} map[string]interface{}
-// @Failure 400 {object} map[string]string
-// @Failure 500 {object} map[string]string
+// @Param request body models.BulkPageRequest true "Request body with start_page and end_page (integers, both required, max range 1,000,000)"
+// @Success 200 {object} models.BulkResponse "Successfully processed bulk stock data fetch with parallel processing"
+// @Failure 400 {object} models.ErrorResponse "Bad request - invalid JSON, negative pages, start > end, or range too large"
+// @Failure 500 {object} models.GenericErrorResponse "Internal server error occurred"
 // @Router /stocks/bulk [post]
 func (h *StockHandler) GetStocksBulk(c *gin.Context) {
 	var req models.BulkPageRequest
@@ -140,9 +140,9 @@ func (h *StockHandler) GetStocksBulk(c *gin.Context) {
 		return
 	}
 
-	// Prevent excessive page ranges
-	if req.EndPage-req.StartPage > 100 {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "Page range too large (max 100 pages)"})
+	// Allow large page ranges for bulk processing
+	if req.EndPage-req.StartPage > 1000000 {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Page range too large (max 1,000,000 pages)"})
 		return
 	}
 
@@ -179,26 +179,25 @@ func (h *StockHandler) clearStockRatings() error {
 	return err
 }
 
-// fetchStocksFromAPI fetches stock data from the external API for a given page.
+// fetchStocksFromAPI attempts to fetch stock data for a specific page
+// Uses retry logic to find data by trying alternative page numbers
 func (h *StockHandler) fetchStocksFromAPI(page int) ([]models.StockRatings, error) {
-	// fetch with retry logic to ensure we get some data
-	// try up to 5 times with different page numbers
 	return h.fetchStocksFromAPIWithRetry(page, 5)
 }
 
-// fetchStocksFromAPIWithRetry tries different page numbers until it gets 10 items
+// fetchStocksFromAPIWithRetry attempts to fetch stock data with retry logic
+// Tries different page numbers using a mathematical pattern to find data
 func (h *StockHandler) fetchStocksFromAPIWithRetry(originalPage, maxRetries int) ([]models.StockRatings, error) {
-	// HTTP client with timeout
 	client := &http.Client{Timeout: 10 * time.Second}
 
 	for attempt := 0; attempt < maxRetries; attempt++ {
-		// Try original page first, then use a better pattern
+		// Calculate page to try: original page first, then use prime number pattern
 		tryPage := originalPage
 		if attempt > 0 {
-			// Prime number for better distribution
-			tryPage = originalPage + attempt*13 
+			tryPage = originalPage + attempt*13 // Prime number for better distribution
 		}
 
+		// Make API request
 		apiURL := fmt.Sprintf("https://api.karenai.click/swechallenge/list?next_page=%d", tryPage)
 		httpReq, err := http.NewRequest("GET", apiURL, nil)
 		if err != nil {
@@ -206,28 +205,26 @@ func (h *StockHandler) fetchStocksFromAPIWithRetry(originalPage, maxRetries int)
 		}
 
 		httpReq.Header.Set("Authorization", "Token "+os.Getenv("API_TOKEN"))
-
 		resp, err := client.Do(httpReq)
 		if err != nil {
 			continue
 		}
 
+		// Parse response
 		var apiResp models.ApiResponse
 		err = json.NewDecoder(resp.Body).Decode(&apiResp)
 		resp.Body.Close()
-
 		if err != nil {
 			continue
 		}
 
-		// Accept any data (not just 10 items) to reduce API calls
+		// Return data if found (no logging here to avoid confusion)
 		if len(apiResp.Items) > 0 {
-			println("✓ Page", originalPage, "-> found", len(apiResp.Items), "items at page", tryPage)
 			return apiResp.Items, nil
 		}
 	}
 
-	println("✗ Page", originalPage, "-> no data found after", maxRetries, "attempts")
+	// Return empty if no data found after all attempts
 	return []models.StockRatings{}, nil
 }
 
@@ -245,132 +242,502 @@ Expected Body format:
 	}
 */
 func (h *StockHandler) fetchStocksBulkParallel(startPage, endPage int) ([]models.StockRatings, int, error) {
+	const BATCH_SIZE = 1000 // Configurable batch size
+	const MAX_CONCURRENT = 30
+	
+	pageCount := endPage - startPage + 1
+	println("🚀 Starting bulk fetch for", pageCount, "pages (from", startPage, "to", endPage, ")")
+	println("📊 Configuration: Batch size =", BATCH_SIZE, ", Max concurrent =", MAX_CONCURRENT)
+	
 	type result struct {
 		stocks []models.StockRatings
 		page   int
 		err    error
 	}
 
-	// Calculate total pages to fetch
-	pageCount := endPage - startPage + 1
-
-	// Channel to collect results
-	results := make(chan result, pageCount)
-
-	// WaitGroup to wait for all goroutines to finish
+	results := make(chan result, 100) // Smaller buffer to prevent memory issues
 	var wg sync.WaitGroup
+	semaphore := make(chan struct{}, MAX_CONCURRENT)
 
-	// Rate limiter: max 20 concurrent requests for faster processing
-	semaphore := make(chan struct{}, 20)
-
-	// Fetch pages with rate limiting
+	// Start goroutines for fetching
+	println("🔄 Launching", MAX_CONCURRENT, "concurrent workers...")
 	for page := startPage; page <= endPage; page++ {
 		wg.Add(1)
 		go func(p int) {
 			defer wg.Done()
-			semaphore <- struct{}{}        // Acquire
-			defer func() { <-semaphore }() // Release
+			semaphore <- struct{}{}
+			defer func() { <-semaphore }()
 
 			stocks, err := h.fetchStocksFromAPI(p)
 			results <- result{stocks: stocks, page: p, err: err}
 		}(page)
 	}
 
-	// Close results channel when all goroutines are done
 	go func() {
 		wg.Wait()
 		close(results)
+		println("✅ All workers finished fetching")
 	}()
 
-	// Collect results
-	var allStocks []models.StockRatings
+	// Process results with detailed logging
+	var stockBuffer []models.StockRatings
 	totalFetched := 0
 	pagesWithData := 0
+	batchCount := 0
+	processedPages := 0
 
-	// for each result, check for errors and aggregate stocks
 	for res := range results {
+		processedPages++
+		
 		if res.err != nil {
+			println("❌ Error on page", res.page, ":", res.err.Error())
 			return nil, 0, fmt.Errorf("failed to fetch page %d: %v", res.page, res.err)
 		}
+
+		// Process pages with data
 		if len(res.stocks) > 0 {
-			allStocks = append(allStocks, res.stocks...)
+			stockBuffer = append(stockBuffer, res.stocks...)
 			totalFetched += len(res.stocks)
 			pagesWithData++
+
+			// Trigger batch insert when buffer reaches limit
+			if len(stockBuffer) >= BATCH_SIZE {
+				batchCount++
+				println("💾 BATCH", batchCount, ": Processing", len(stockBuffer), "stocks...")
+				
+				if err := h.batchInsertStocksWithLogging(stockBuffer, batchCount); err != nil {
+					return nil, 0, fmt.Errorf("failed to insert batch %d: %v", batchCount, err)
+				}
+				
+				stockBuffer = stockBuffer[:0] // Clear buffer
+			}
+		}
+
+		// Progress update every 1000 pages
+		if processedPages%1000 == 0 {
+			println("📈 Progress:", processedPages, "/", pageCount, "pages processed (", fmt.Sprintf("%.1f%%", float64(processedPages)/float64(pageCount)*100), ")")
 		}
 	}
 
-	println("Summary:", pagesWithData, "pages with data out of", pageCount, "total pages")
-
-	if err := h.batchInsertStocks(allStocks); err != nil {
-		return nil, 0, fmt.Errorf("failed to insert stocks: %v", err)
+	// Insert remaining stocks
+	if len(stockBuffer) > 0 {
+		batchCount++
+		println("💾 FINAL BATCH", batchCount, ": Inserting remaining", len(stockBuffer), "stocks...")
+		if err := h.batchInsertStocksWithLogging(stockBuffer, batchCount); err != nil {
+			return nil, 0, fmt.Errorf("failed to insert final batch: %v", err)
+		}
+		println("✅ FINAL BATCH", batchCount, "successfully inserted")
 	}
 
-	return allStocks, totalFetched, nil
+	// Get actual database count for verification
+	var actualCount int
+	h.DB.QueryRow("SELECT COUNT(*) FROM stock_ratings").Scan(&actualCount)
+	
+	println("🎉 SUMMARY: Processed", processedPages, "pages, found data in", pagesWithData, "pages")
+	println("📊 Total stocks fetched:", totalFetched, "| Total batches processed:", batchCount)
+	println("💾 Database verification: Actual records in DB =", actualCount)
+	if actualCount < totalFetched {
+		println("⚠️  Note:", totalFetched-actualCount, "duplicates were skipped due to UNIQUE constraint")
+	}
+	return []models.StockRatings{}, totalFetched, nil
 }
 
-// batchInsertStocks inserts multiple stock records into the database in a single transaction.
-func (h *StockHandler) batchInsertStocks(stocks []models.StockRatings) error {
-	// Validate if there are stocks to insert
+// batchInsertStocksWithLogging inserts stock records in a single database transaction
+// Provides progress updates for large batches and detailed error reporting
+func (h *StockHandler) batchInsertStocksWithLogging(stocks []models.StockRatings, batchNum int) error {
 	if len(stocks) == 0 {
 		return nil
 	}
 
-	// Begin a transaction
+	// Begin database transaction
 	tx, err := h.DB.Begin()
 	if err != nil {
+		println("❌ BATCH", batchNum, ": Transaction failed:", err.Error())
 		return err
 	}
-
-	// Ensure to rollback the transaction in case of an error
 	defer tx.Rollback()
 
-	// Prepare the insert statement
+	// Prepare insert statement
 	stmt, err := tx.Prepare(`
 		INSERT INTO stock_ratings (ticker, target_from, target_to, company, action, brokerage, rating_from, rating_to, time, created_at)
 		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
-		ON CONFLICT (ticker, time) DO NOTHING`)
+		ON CONFLICT (ticker, brokerage, action, rating_from, rating_to, time) DO NOTHING`)
 	if err != nil {
+		println("❌ BATCH", batchNum, ": Statement preparation failed:", err.Error())
 		return err
 	}
-
-	// Close the statement when done
 	defer stmt.Close()
 
-	// Execute the statement for each stock
-	for _, stock := range stocks {
-		_, err := stmt.Exec(
+	// Execute inserts with progress tracking
+	insertedCount := 0
+	skippedCount := 0
+	for i, stock := range stocks {
+		result, err := stmt.Exec(
 			stock.Ticker, stock.TargetFrom, stock.TargetTo, stock.Company,
 			stock.Action, stock.Brokerage, stock.RatingFrom, stock.RatingTo,
 			stock.Time, time.Now())
 		if err != nil {
+			println("❌ BATCH", batchNum, ": Insert failed for", stock.Ticker, ":", err.Error())
 			return err
+		}
+		
+		// Check if row was actually inserted (not a duplicate)
+		rowsAffected, _ := result.RowsAffected()
+		if rowsAffected > 0 {
+			insertedCount++
+		} else {
+			skippedCount++
+		}
+		
+		// Show progress every 200 attempts
+		if (i+1)%200 == 0 {
+			println("📈 BATCH", batchNum, ":", i+1, "/", len(stocks), "processed (", insertedCount, "new,", skippedCount, "duplicates)")
 		}
 	}
 
-	return tx.Commit()
+	// Commit transaction
+	if err := tx.Commit(); err != nil {
+		println("❌ BATCH", batchNum, ": Commit failed:", err.Error())
+		return err
+	}
+
+	println("✅ BATCH", batchNum, ": Committed", insertedCount, "new stocks (", skippedCount, "duplicates skipped)")
+	return nil
 }
 
-/*
-storeStock saves a stock entry into the database.
-*/
+// storeStock inserts a single stock record into the database
+// Used by single-page endpoint, bulk operations use batchInsertStocks instead
 func (h *StockHandler) storeStock(stock models.StockRatings) error {
-	// Let's make the query
-	// ✅ SAFE - Uses parameterized query
 	query := `
 		INSERT INTO stock_ratings (ticker, target_from, target_to, company, action, brokerage, rating_from, rating_to, time, created_at)
 		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
-		ON CONFLICT (ticker, time) DO NOTHING`
+		ON CONFLICT (ticker, brokerage, action, rating_from, rating_to, time) DO NOTHING`
 
-	// Execute the query with the stock data
 	_, err := h.DB.Exec(query,
 		stock.Ticker, stock.TargetFrom, stock.TargetTo, stock.Company,
 		stock.Action, stock.Brokerage, stock.RatingFrom, stock.RatingTo,
 		stock.Time, time.Now())
 
-	if err != nil {
-		println("error storing stock:", err.Error())
-	} else {
-		println("successfully stored stock:", stock.Ticker)
-	}
 	return err
+}
+
+// GetStockRatings retrieves paginated stock ratings from database
+// @Summary Get paginated stock ratings from database
+// @Description Retrieves stored stock ratings with pagination support, ordered by creation date (newest first). Returns both data and pagination metadata.
+// @Tags stocks
+// @Accept json
+// @Produce json
+// @Param request body models.PaginationRequest true "Request body with page_number (integer, min 1) and page_length (integer, 1-1000)"
+// @Success 200 {object} models.PaginatedResponse "Successfully retrieved paginated stock ratings with metadata"
+// @Failure 400 {object} models.ErrorResponse "Bad request - invalid JSON, page_number <= 0, or page_length not between 1-1000"
+// @Failure 500 {object} models.GenericErrorResponse "Internal server error occurred"
+// @Router /stocks/list [post]
+func (h *StockHandler) GetStockRatings(c *gin.Context) {
+	var req models.PaginationRequest
+
+	// Parse request body
+	if err := json.NewDecoder(c.Request.Body).Decode(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid JSON format in request body"})
+		return
+	}
+
+	// Validate pagination parameters
+	if req.PageNumber <= 0 {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "page_number must be greater than 0"})
+		return
+	}
+
+	if req.PageLength <= 0 || req.PageLength > 1000 {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "page_length must be between 1 and 1000"})
+		return
+	}
+
+	// Calculate offset for pagination
+	offset := (req.PageNumber - 1) * req.PageLength
+
+	// Get total count
+	var totalCount int
+	err := h.DB.QueryRow("SELECT COUNT(*) FROM stock_ratings").Scan(&totalCount)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to get total count"})
+		return
+	}
+
+	// Query paginated data
+	query := `
+		SELECT id, ticker, target_from, target_to, company, action, brokerage, rating_from, rating_to, time, created_at
+		FROM stock_ratings
+		ORDER BY created_at DESC, id DESC
+		LIMIT $1 OFFSET $2`
+
+	rows, err := h.DB.Query(query, req.PageLength, offset)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to query stock ratings"})
+		return
+	}
+	defer rows.Close()
+
+	// Parse results
+	var stocks []models.StockRatings
+	for rows.Next() {
+		var stock models.StockRatings
+		err := rows.Scan(
+			&stock.ID, &stock.Ticker, &stock.TargetFrom, &stock.TargetTo,
+			&stock.Company, &stock.Action, &stock.Brokerage,
+			&stock.RatingFrom, &stock.RatingTo, &stock.Time, &stock.CreatedAt)
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to scan stock data"})
+			return
+		}
+		stocks = append(stocks, stock)
+	}
+
+	// Calculate pagination metadata
+	totalPages := (totalCount + req.PageLength - 1) / req.PageLength
+	hasNext := req.PageNumber < totalPages
+	hasPrev := req.PageNumber > 1
+
+	// Return paginated response
+	c.JSON(http.StatusOK, gin.H{
+		"data": stocks,
+		"pagination": gin.H{
+			"page_number":   req.PageNumber,
+			"page_length":   req.PageLength,
+			"total_records": totalCount,
+			"total_pages":   totalPages,
+			"has_next":      hasNext,
+			"has_previous":  hasPrev,
+		},
+	})
+}
+
+// GetStockMetrics calculates and returns comprehensive market metrics from stock ratings data
+// @Summary Get comprehensive stock market analytics and metrics
+// @Description Analyzes all stored stock ratings using parallel processing to provide comprehensive market insights including sentiment analysis, target price changes, rating distributions, top brokerages, most active stocks, and recent activity trends.
+// @Tags analytics
+// @Produce json
+// @Success 200 {object} models.MetricsResponse "Successfully calculated comprehensive market metrics and analytics"
+// @Failure 500 {object} models.GenericErrorResponse "Internal server error occurred"
+// @Router /stocks/metrics [get]
+func (h *StockHandler) GetStockMetrics(c *gin.Context) {
+	// Execute multiple queries in parallel for better performance
+	type MetricResult struct {
+		Name  string
+		Value interface{}
+		Error error
+	}
+
+	results := make(chan MetricResult, 10)
+	var wg sync.WaitGroup
+
+	// 1. Total Records Count
+	wg.Add(1)
+	go func() {
+		defer wg.Done()
+		var count int
+		err := h.DB.QueryRow("SELECT COUNT(*) FROM stock_ratings").Scan(&count)
+		results <- MetricResult{"total_records", count, err}
+	}()
+
+	// 2. Target Price Changes Analysis
+	wg.Add(1)
+	go func() {
+		defer wg.Done()
+		query := `
+			SELECT 
+				SUM(CASE WHEN action ILIKE '%raised%' OR action ILIKE '%increase%' OR action ILIKE '%upgrade%' THEN 1 ELSE 0 END) as targets_raised,
+				SUM(CASE WHEN action ILIKE '%lowered%' OR action ILIKE '%decrease%' OR action ILIKE '%downgrade%' THEN 1 ELSE 0 END) as targets_lowered,
+				SUM(CASE WHEN action ILIKE '%maintained%' OR action ILIKE '%reiterated%' THEN 1 ELSE 0 END) as targets_maintained
+			FROM stock_ratings`
+		
+		var raised, lowered, maintained int
+		err := h.DB.QueryRow(query).Scan(&raised, &lowered, &maintained)
+		if err != nil {
+			results <- MetricResult{"target_changes", nil, err}
+			return
+		}
+		
+		results <- MetricResult{"target_changes", map[string]int{
+			"raised":     raised,
+			"lowered":    lowered,
+			"maintained": maintained,
+		}, nil}
+	}()
+
+	// 3. Rating Distribution Analysis
+	wg.Add(1)
+	go func() {
+		defer wg.Done()
+		query := `
+			SELECT rating_to, COUNT(*) as count
+			FROM stock_ratings 
+			WHERE rating_to IS NOT NULL AND rating_to != ''
+			GROUP BY rating_to 
+			ORDER BY count DESC
+			LIMIT 10`
+		
+		rows, err := h.DB.Query(query)
+		if err != nil {
+			results <- MetricResult{"rating_distribution", nil, err}
+			return
+		}
+		defer rows.Close()
+		
+		ratings := make(map[string]int)
+		for rows.Next() {
+			var rating string
+			var count int
+			if err := rows.Scan(&rating, &count); err != nil {
+				continue
+			}
+			ratings[rating] = count
+		}
+		
+		results <- MetricResult{"rating_distribution", ratings, nil}
+	}()
+
+	// 4. Top Active Brokerages
+	wg.Add(1)
+	go func() {
+		defer wg.Done()
+		query := `
+			SELECT brokerage, COUNT(*) as activity_count
+			FROM stock_ratings 
+			WHERE brokerage IS NOT NULL AND brokerage != ''
+			GROUP BY brokerage 
+			ORDER BY activity_count DESC
+			LIMIT 10`
+		
+		rows, err := h.DB.Query(query)
+		if err != nil {
+			results <- MetricResult{"top_brokerages", nil, err}
+			return
+		}
+		defer rows.Close()
+		
+		brokerages := make([]map[string]interface{}, 0)
+		for rows.Next() {
+			var brokerage string
+			var count int
+			if err := rows.Scan(&brokerage, &count); err != nil {
+				continue
+			}
+			brokerages = append(brokerages, map[string]interface{}{
+				"name":     brokerage,
+				"activity": count,
+			})
+		}
+		
+		results <- MetricResult{"top_brokerages", brokerages, nil}
+	}()
+
+	// 5. Most Active Stocks (by ticker)
+	wg.Add(1)
+	go func() {
+		defer wg.Done()
+		query := `
+			SELECT ticker, company, COUNT(*) as rating_count
+			FROM stock_ratings 
+			WHERE ticker IS NOT NULL AND ticker != ''
+			GROUP BY ticker, company 
+			ORDER BY rating_count DESC
+			LIMIT 15`
+		
+		rows, err := h.DB.Query(query)
+		if err != nil {
+			results <- MetricResult{"most_active_stocks", nil, err}
+			return
+		}
+		defer rows.Close()
+		
+		stocks := make([]map[string]interface{}, 0)
+		for rows.Next() {
+			var ticker, company string
+			var count int
+			if err := rows.Scan(&ticker, &company, &count); err != nil {
+				continue
+			}
+			stocks = append(stocks, map[string]interface{}{
+				"ticker":       ticker,
+				"company":      company,
+				"rating_count": count,
+			})
+		}
+		
+		results <- MetricResult{"most_active_stocks", stocks, nil}
+	}()
+
+	// 6. Market Sentiment Analysis
+	wg.Add(1)
+	go func() {
+		defer wg.Done()
+		query := `
+			SELECT 
+				SUM(CASE WHEN rating_to ILIKE '%buy%' OR rating_to ILIKE '%strong%' THEN 1 ELSE 0 END) as bullish_ratings,
+				SUM(CASE WHEN rating_to ILIKE '%sell%' OR rating_to ILIKE '%underperform%' THEN 1 ELSE 0 END) as bearish_ratings,
+				SUM(CASE WHEN rating_to ILIKE '%hold%' OR rating_to ILIKE '%neutral%' THEN 1 ELSE 0 END) as neutral_ratings
+			FROM stock_ratings 
+			WHERE rating_to IS NOT NULL AND rating_to != ''`
+		
+		var bullish, bearish, neutral int
+		err := h.DB.QueryRow(query).Scan(&bullish, &bearish, &neutral)
+		if err != nil {
+			results <- MetricResult{"market_sentiment", nil, err}
+			return
+		}
+		
+		total := bullish + bearish + neutral
+		sentiment := map[string]interface{}{
+			"bullish_count":      bullish,
+			"bearish_count":      bearish,
+			"neutral_count":      neutral,
+			"bullish_percentage": float64(bullish) / float64(total) * 100,
+			"bearish_percentage": float64(bearish) / float64(total) * 100,
+			"neutral_percentage": float64(neutral) / float64(total) * 100,
+		}
+		
+		results <- MetricResult{"market_sentiment", sentiment, nil}
+	}()
+
+	// 7. Recent Activity (last 7 days)
+	wg.Add(1)
+	go func() {
+		defer wg.Done()
+		query := `
+			SELECT COUNT(*) as recent_count
+			FROM stock_ratings 
+			WHERE created_at >= NOW() - INTERVAL '7 days'`
+		
+		var recentCount int
+		err := h.DB.QueryRow(query).Scan(&recentCount)
+		results <- MetricResult{"recent_activity", recentCount, err}
+	}()
+
+	// Wait for all goroutines to complete
+	go func() {
+		wg.Wait()
+		close(results)
+	}()
+
+	// Collect all results
+	metrics := make(map[string]interface{})
+	for result := range results {
+		if result.Error != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{
+				"error": fmt.Sprintf("Failed to calculate %s: %v", result.Name, result.Error),
+			})
+			return
+		}
+		metrics[result.Name] = result.Value
+	}
+
+	// Add metadata
+	metrics["generated_at"] = time.Now().UTC()
+	metrics["description"] = "Comprehensive stock market analytics based on analyst ratings and target price changes"
+
+	// Return comprehensive metrics
+	c.JSON(http.StatusOK, gin.H{
+		"success": true,
+		"metrics": metrics,
+	})
 }

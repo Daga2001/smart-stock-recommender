@@ -64,6 +64,8 @@ func main() {
 	{
 		api.POST("/stocks", stockHandler.GetStocksByPage)
 		api.POST("/stocks/bulk", stockHandler.GetStocksBulk)
+		api.POST("/stocks/list", stockHandler.GetStockRatings)
+		api.GET("/stocks/metrics", stockHandler.GetStockMetrics)
 	}
 
 	// define the port to run the server on
@@ -93,7 +95,7 @@ func createTables(db *sql.DB) {
 		rating_to VARCHAR(50),
 		time TIMESTAMP,
 		created_at TIMESTAMP DEFAULT NOW(),
-		UNIQUE(ticker, time)
+		UNIQUE(ticker, brokerage, action, rating_from, rating_to, time)
 	)`
 
 	// Execute the query
