@@ -4,6 +4,7 @@ import { StockBadge } from './StockBadge';
 import { ArrowUpDown, ArrowUp, ArrowDown, TrendingUp, TrendingDown, Zap, Eye, ChevronLeft, ChevronRight } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 
+// StockTable Props
 interface StockTableProps {
   stocks: Stock[];
   currentPage: number;
@@ -11,6 +12,11 @@ interface StockTableProps {
   loading: boolean;
 }
 
+/**
+ * It's purpose is to display a sortable table of stock data with pagination controls.
+ * @param param0 StockTableProps
+ * @returns 
+ */
 export const StockTable = ({ stocks, currentPage, onPageChange, loading }: StockTableProps) => {
   const [sortField, setSortField] = useState<SortField>('ticker');
   const [sortDirection, setSortDirection] = useState<SortDirection>('asc');
@@ -66,27 +72,7 @@ export const StockTable = ({ stocks, currentPage, onPageChange, loading }: Stock
 
   return (
     <div className="glass-card border border-border/50 overflow-hidden animate-fade-in">
-      <div className="flex items-center justify-center p-4 border-b border-border/30">
-        <div className="flex items-center gap-2">
-          <Button 
-            onClick={() => onPageChange(currentPage - 1)} 
-            disabled={currentPage === 1 || loading}
-            variant="outline" 
-            size="sm"
-          >
-            <ChevronLeft className="h-4 w-4" />
-          </Button>
-          <span className="px-4 py-2 text-sm font-medium">{currentPage}</span>
-          <Button 
-            onClick={() => onPageChange(currentPage + 1)} 
-            disabled={loading}
-            variant="outline" 
-            size="sm"
-          >
-            <ChevronRight className="h-4 w-4" />
-          </Button>
-        </div>
-      </div>
+
       <div className="overflow-x-auto">
         <table className="w-full">
           <thead>

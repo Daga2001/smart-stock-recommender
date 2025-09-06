@@ -1,5 +1,9 @@
 import { Stock } from '../types/stock';
 
+/**
+ * mockStocks provides a list of mock stock data for testing and development purposes.
+ */
+
 export const mockStocks: Stock[] = [
   {
     ticker: "AKBA",

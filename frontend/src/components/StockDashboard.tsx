@@ -6,14 +6,38 @@ import { StockRecommendations } from './StockRecommendations';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { TrendingUp, TrendingDown, BarChart3, Users, Activity, DollarSign, Target, Star } from 'lucide-react';
 
+/**
+ * Props for the StockDashboard component.
+ */
+
 interface StockDashboardProps {
   stocks: Stock[];
   currentPage: number;
   onPageChange: (page: number) => void;
   loading: boolean;
+  pageLength?: number;
+  onPageLengthChange?: (length: number) => void;
+  totalPages?: number;
+  totalRecords?: number;
 }
 
-export const StockDashboard = ({ stocks, currentPage, onPageChange, loading }: StockDashboardProps) => {
+/**
+ * StockDashboard Component, a comprehensive dashboard for 
+ * displaying stock data with filtering, statistics, and recommendations.
+ * @param param0 StockDashboardProps
+ * @returns 
+ */
+
+export const StockDashboard = ({ 
+  stocks, 
+  currentPage, 
+  onPageChange, 
+  loading, 
+  pageLength = 20,
+  onPageLengthChange,
+  totalPages = 1,
+  totalRecords = 0
+}: StockDashboardProps) => {
   const [filters, setFilters] = useState<StockFilters>({
     search: '',
     action: 'all'
@@ -23,9 +47,9 @@ export const StockDashboard = ({ stocks, currentPage, onPageChange, loading }: S
     return stocks.filter(stock => {
       const searchLower = filters.search.toLowerCase();
       const matchesSearch = !filters.search || 
-        stock.ticker.toLowerCase().includes(searchLower) ||
-        stock.company.toLowerCase().includes(searchLower) ||
-        stock.brokerage.toLowerCase().includes(searchLower);
+        (stock.ticker && stock.ticker.toLowerCase().includes(searchLower)) ||
+        (stock.company && stock.company.toLowerCase().includes(searchLower)) ||
+        (stock.brokerage && stock.brokerage.toLowerCase().includes(searchLower));
       
       const matchesAction = filters.action === 'all' || !filters.action || stock.action === filters.action;
       
@@ -37,25 +61,31 @@ export const StockDashboard = ({ stocks, currentPage, onPageChange, loading }: S
   const stats = useMemo(() => {
     const totalStocks = stocks.length;
     const targetsRaised = stocks.filter(s => {
+      if (!s.target_to || !s.target_from) return false;
       const targetTo = parseFloat(s.target_to.replace('$', ''));
       const targetFrom = parseFloat(s.target_from.replace('$', ''));
-      return targetTo > targetFrom;
+      return !isNaN(targetTo) && !isNaN(targetFrom) && targetTo > targetFrom;
     }).length;
     const targetsLowered = stocks.filter(s => {
+      if (!s.target_to || !s.target_from) return false;
       const targetTo = parseFloat(s.target_to.replace('$', ''));
       const targetFrom = parseFloat(s.target_from.replace('$', ''));
-      return targetTo < targetFrom;
+      return !isNaN(targetTo) && !isNaN(targetFrom) && targetTo < targetFrom;
     }).length;
     const buyRatings = stocks.filter(s => 
-      s.rating_to.toLowerCase().includes('buy') || 
-      s.rating_to.toLowerCase().includes('outperform')
+      s.rating_to && (
+        s.rating_to.toLowerCase().includes('buy') || 
+        s.rating_to.toLowerCase().includes('outperform')
+      )
     ).length;
     
-    const avgPriceChange = stocks.reduce((sum, stock) => {
+    const validStocks = stocks.filter(s => s.target_to && s.target_from);
+    const avgPriceChange = validStocks.length > 0 ? validStocks.reduce((sum, stock) => {
       const targetTo = parseFloat(stock.target_to.replace('$', ''));
       const targetFrom = parseFloat(stock.target_from.replace('$', ''));
+      if (isNaN(targetTo) || isNaN(targetFrom) || targetFrom === 0) return sum;
       return sum + ((targetTo - targetFrom) / targetFrom) * 100;
-    }, 0) / stocks.length;
+    }, 0) / validStocks.length : 0;
     
     return {
       totalStocks,
@@ -218,6 +248,44 @@ export const StockDashboard = ({ stocks, currentPage, onPageChange, loading }: S
               </div>
               <div className="text-xs text-muted-foreground mt-1">
                 Last updated: {new Date().toLocaleTimeString()}
+              </div>
+            </div>
+          </div>
+          
+          {/* Pagination Controls */}
+          <div className="glass-card border border-border/50 p-6 animate-fade-in">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-6">
+                <div className="flex items-center gap-3">
+                  <label className="text-sm font-semibold text-foreground">Page:</label>
+                  <input
+                    type="number"
+                    min="1"
+                    max={totalPages}
+                    value={currentPage}
+                    onChange={(e) => onPageChange(Math.max(1, Math.min(totalPages, parseInt(e.target.value) || 1)))}
+                    className="w-20 px-3 py-2 glass-card border border-border/50 rounded-lg text-sm font-mono font-semibold text-center focus:ring-2 focus:ring-primary/50 focus:border-primary transition-all duration-200 hover:shadow-premium"
+                  />
+                  <span className="text-sm text-muted-foreground font-medium">of {totalPages}</span>
+                </div>
+                
+                <div className="flex items-center gap-3">
+                  <label className="text-sm font-semibold text-foreground">Show:</label>
+                  <select
+                    value={pageLength}
+                    onChange={(e) => onPageLengthChange?.(parseInt(e.target.value))}
+                    className="px-4 py-2 glass-card border border-border/50 rounded-lg text-sm font-medium focus:ring-2 focus:ring-primary/50 focus:border-primary transition-all duration-200 hover:shadow-premium cursor-pointer"
+                  >
+                    <option value={10}>10 per page</option>
+                    <option value={20}>20 per page</option>
+                    <option value={50}>50 per page</option>
+                    <option value={100}>100 per page</option>
+                  </select>
+                </div>
+              </div>
+              
+              <div className="text-sm text-muted-foreground font-medium">
+                <span className="text-primary font-semibold">{totalRecords.toLocaleString()}</span> total records
               </div>
             </div>
           </div>

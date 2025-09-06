@@ -4,10 +4,21 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Search, Filter, Sparkles, RefreshCw } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 
+/**
+ * Props for the StockFilters component.
+ */
+
 interface StockFiltersProps {
   filters: FiltersType;
   onFiltersChange: (filters: FiltersType) => void;
 }
+
+/**
+ * It's purpose is to provide filtering options for stocks based 
+ * on search terms and action types.
+ * @param param0 StockFiltersProps
+ * @returns 
+ */
 
 export const StockFilters = ({ filters, onFiltersChange }: StockFiltersProps) => {
   const clearFilters = () => {

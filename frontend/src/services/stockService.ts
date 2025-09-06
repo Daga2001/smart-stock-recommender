@@ -1,19 +1,44 @@
-import { ApiResponse } from '../types/stock';
+import { API_CONFIG, StockListResponse, PaginationRequest } from '../config/api';
 
-const API_URL = 'https://api.karenai.click/swechallenge/list';
-const API_TOKEN = import.meta.env.VITE_STOCK_API_TOKEN;
+/**
+ * Service class to interact with the stock-related API endpoints.
+ */
 
-export const fetchStocks = async (page?: number): Promise<ApiResponse> => {
-  const url = page ? `${API_URL}?next_page=${page}` : API_URL;
-  const response = await fetch(url, {
-    headers: {
-      'Authorization': `Token ${API_TOKEN}`,
-    },
-  });
+class StockService {
+  private baseUrl = API_CONFIG.BASE_URL;
 
-  if (!response.ok) {
-    throw new Error(`Failed to fetch stocks: ${response.statusText}`);
+  // Method to fetch paginated stock ratings
+  async getStockRatings(pagination: PaginationRequest): Promise<StockListResponse> {
+    const response = await fetch(`${this.baseUrl}${API_CONFIG.ENDPOINTS.STOCKS_LIST}`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify(pagination),
+    });
+
+    if (!response.ok) {
+      throw new Error(`Failed to fetch stock ratings: ${response.statusText}`);
+    }
+
+    return response.json();
   }
 
-  return response.json();
-};
+  // New method to fetch stock metrics
+  async getStockMetrics() {
+    const response = await fetch(`${this.baseUrl}${API_CONFIG.ENDPOINTS.STOCKS_METRICS}`, {
+      method: 'GET',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+    });
+
+    if (!response.ok) {
+      throw new Error(`Failed to fetch stock metrics: ${response.statusText}`);
+    }
+
+    return response.json();
+  }
+}
+
+export const stockService = new StockService();

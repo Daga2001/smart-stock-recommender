@@ -5,6 +5,12 @@ interface StockBadgeProps {
   size?: "sm" | "lg";
 }
 
+/**
+ * It's purpose is to display a badge indicating the stock rating with different styles based on the rating value.
+ * @param param0 StockBadgeProps
+ * @returns 
+ */
+
 export const StockBadge = ({ rating, size = "sm" }: StockBadgeProps) => {
   const getRatingVariant = (rating: string) => {
     const lowerRating = rating.toLowerCase();

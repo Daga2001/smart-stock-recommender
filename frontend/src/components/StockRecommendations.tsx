@@ -3,9 +3,16 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { StockBadge } from './StockBadge';
 import { TrendingUp, Award, Target, Crown, Zap, Star, Medal, Trophy } from 'lucide-react';
 
+// Props for the StockRecommendations component.
 interface StockRecommendationsProps {
   stocks: Stock[];
 }
+
+/**
+ * It's purpose is to analyze stock data and highlight top recommendations based on target price increases and buy ratings.
+ * @param param0 StockRecommendationsProps
+ * @returns 
+ */
 
 export const StockRecommendations = ({ stocks }: StockRecommendationsProps) => {
   // Calculate recommendations based on target price increases and buy ratings
