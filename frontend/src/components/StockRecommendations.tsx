@@ -40,7 +40,7 @@ export const StockRecommendations = ({}: StockRecommendationsProps) => {
   }, []);
 
   const getRecommendationReason = (rec: StockRecommendation) => {
-    return rec.reason || 'AI-powered analysis indicates strong potential';
+    return rec.reason || 'Quantitative analysis indicates strong potential';
   };
 
   const getRankIcon = (index: number) => {
@@ -70,11 +70,11 @@ export const StockRecommendations = ({}: StockRecommendationsProps) => {
           </div>
           <div>
             <h2 className="text-2xl font-bold flex items-center gap-2">
-              Top 3 AI Recommendations
-              <Bot className="h-5 w-5 text-primary animate-pulse" />
+              Top 3 Analyst Recommendations
+              <TrendingUp className="h-5 w-5 text-primary animate-pulse" />
             </h2>
             <p className="text-muted-foreground text-sm leading-relaxed">
-              Algorithm considers: <span className="font-semibold">Target price changes</span>, <span className="font-semibold">Rating improvements</span> (Buy, Outperform), and <span className="font-semibold">Analyst sentiment</span>
+              Quantitative algorithm considers: <span className="font-semibold">Target price changes</span>, <span className="font-semibold">Rating improvements</span> (Buy, Outperform), and <span className="font-semibold">Analyst sentiment</span>
             </p>
           </div>
         </div>
@@ -90,7 +90,7 @@ export const StockRecommendations = ({}: StockRecommendationsProps) => {
             {loading ? 'Loading...' : 'Refresh'}
           </Button>
           <div className="text-xs text-muted-foreground">
-            AI-powered analysis
+            Quantitative analysis
           </div>
         </div>
       </div>
@@ -100,7 +100,7 @@ export const StockRecommendations = ({}: StockRecommendationsProps) => {
           return (
             <div className="flex items-center justify-center py-12">
               <RefreshCw className="h-8 w-8 animate-spin text-primary" />
-              <span className="ml-2 text-muted-foreground">Loading AI recommendations...</span>
+              <span className="ml-2 text-muted-foreground">Loading recommendations...</span>
             </div>
           );
         }

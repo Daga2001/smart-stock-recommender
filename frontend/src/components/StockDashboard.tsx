@@ -136,7 +136,7 @@ export const StockDashboard = ({
                     Stock Market <span className="gradient-primary bg-clip-text text-transparent">Intelligence</span>
                   </h1>
                   <p className="text-lg text-muted-foreground animate-slide-up">
-                    Advanced analytics • Real-time insights • Professional recommendations
+                    Advanced analytics • Valuable insights • AI assited recommendations
                   </p>
                 </div>
               </div>

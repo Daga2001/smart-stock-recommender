@@ -671,8 +671,8 @@ type stockData struct {
 	RatingTo   string
 	TargetFrom string
 	TargetTo   string
-	Time       string
-	CreatedAt  time.Time
+	Time       string // Actual analyst report time (the important one for analysis)
+	// Note: CreatedAt removed - we don't need database insertion time for analysis
 }
 
 // StockRecommendation represents a stock recommendation
@@ -710,7 +710,7 @@ func (h *StockHandler) GetStockRecommendations(c *gin.Context) {
 		       target_from, target_to, time, created_at
 		FROM stock_ratings 
 		WHERE ticker IS NOT NULL AND company IS NOT NULL
-		ORDER BY created_at DESC`
+		ORDER BY time DESC`
 
 	rows, err := h.DB.Query(query)
 	if err != nil {
@@ -723,9 +723,10 @@ func (h *StockHandler) GetStockRecommendations(c *gin.Context) {
 	var stocks []stockData
 	for rows.Next() {
 		var stock stockData
+		var createdAt time.Time // Scan but don't use for analysis
 		err := rows.Scan(&stock.Ticker, &stock.Company, &stock.Action, &stock.Brokerage,
 			&stock.RatingFrom, &stock.RatingTo, &stock.TargetFrom, &stock.TargetTo,
-			&stock.Time, &stock.CreatedAt)
+			&stock.Time, &createdAt)
 		if err != nil {
 			continue
 		}
@@ -743,7 +744,7 @@ func (h *StockHandler) GetStockRecommendations(c *gin.Context) {
 	})
 }
 
-// analyzeStocksForRecommendations implements the AI recommendation algorithm
+// analyzeStocksForRecommendations implements the quantitative recommendation algorithm
 // 
 // ALGORITHM OVERVIEW:
 // 1. Groups all stocks by ticker symbol to get latest data per company
@@ -773,22 +774,26 @@ func analyzeStocksForRecommendations(stocks []stockData) []StockRecommendation {
 			continue
 		}
 
-		// Get the most recent entry for this stock
+		// Get the most recent entry for this stock (based on actual analyst report time)
 		latestStock := stockList[0]
 		for _, s := range stockList {
-			if s.CreatedAt.After(latestStock.CreatedAt) {
+			// Parse time strings to compare actual report dates
+			sTime, sErr := time.Parse("2006-01-02 15:04:05", s.Time)
+			latestTime, latestErr := time.Parse("2006-01-02 15:04:05", latestStock.Time)
+			if sErr == nil && latestErr == nil && sTime.After(latestTime) {
 				latestStock = s
 			}
 		}
 
-		// STEP 3: Calculate AI recommendation score (0-10 scale)
-		// Uses weighted algorithm considering multiple factors
+		// STEP 3: Calculate quantitative recommendation score (0-10 scale)
+		// Uses configurable weighted algorithm considering multiple factors
 		score := calculateStockScore(latestStock, stockList)
 		if score < 5.0 { // QUALITY FILTER: Only recommend stocks with score >= 5.0
 			continue // Skip low-quality recommendations
 		}
 
 		// Parse target prices for analysis
+		// Parse "$150.00" -> 150.0
 		targetFrom := parsePrice(latestStock.TargetFrom)
 		targetTo := parsePrice(latestStock.TargetTo)
 		priceChange := 0.0
@@ -830,16 +835,36 @@ func analyzeStocksForRecommendations(stocks []stockData) []StockRecommendation {
 	return recommendations // Sorted list: [highest_score, second_highest, third_highest, ...]
 }
 
-// calculateStockScore implements the weighted scoring algorithm
+// ScoringWeights defines configurable weights for stock scoring algorithm
+// Allows easy modification of scoring criteria for market adaptability
+type ScoringWeights struct {
+	TargetPriceWeight float64 // Weight for target price changes (default: 0.4)
+	RatingWeight      float64 // Weight for rating analysis (default: 0.3)
+	ActionWeight      float64 // Weight for action analysis (default: 0.2)
+	TimingWeight      float64 // Weight for recent activity (default: 0.1)
+}
+
+// getDefaultWeights returns the default scoring weights
+// These can be easily modified based on market conditions
+func getDefaultWeights() ScoringWeights {
+	return ScoringWeights{
+		TargetPriceWeight: 0.4, // 40% - Most important for speculative markets
+		RatingWeight:      0.3, // 30% - Professional analyst opinion
+		ActionWeight:      0.2, // 20% - Direction of analyst changes
+		TimingWeight:      0.1, // 10% - Recent activity bonus
+	}
+}
+
+// calculateStockScore implements the configurable weighted scoring algorithm
 // 
 // SCORING SYSTEM (0-10 scale):
 // Base Score: 5.0 (neutral starting point)
 // 
-// WEIGHT DISTRIBUTION:
-// 🎯 Target Price Changes: 40% (most important)
-// ⭐ Rating Analysis: 30% (second most important) 
-// 📊 Action Analysis: 20% (third most important)
-// ⏰ Recent Activity: 10% (timing bonus)
+// CONFIGURABLE WEIGHTS (easily modifiable for market conditions):
+// 🎯 Target Price Changes: Configurable % (default 40%)
+// ⭐ Rating Analysis: Configurable % (default 30%)
+// 📊 Action Analysis: Configurable % (default 20%)
+// ⏰ Recent Activity: Configurable % (default 10%)
 // 
 // SCORE RANGES:
 // 8.5-10.0 = Strong Buy (top tier recommendations)
@@ -848,63 +873,68 @@ func analyzeStocksForRecommendations(stocks []stockData) []StockRecommendation {
 // 5.0-5.9  = Hold (minimum threshold)
 // 0.0-4.9  = Not recommended (filtered out)
 func calculateStockScore(stock stockData, history []stockData) float64 {
+	weights := getDefaultWeights() // Get configurable weights
 	score := 5.0 // NEUTRAL BASE SCORE - every stock starts here
 
-	// 🎯 CRITERION 1: TARGET PRICE ANALYSIS (40% WEIGHT - MOST IMPORTANT)
-	// Why 40%? Price targets directly indicate expected returns
+	// 🎯 CRITERION 1: TARGET PRICE ANALYSIS (CONFIGURABLE WEIGHT)
+	// Price targets directly indicate expected returns - critical for speculative markets
 	targetFrom := parsePrice(stock.TargetFrom) // Parse "$150.00" -> 150.0
 	targetTo := parsePrice(stock.TargetTo)     // Parse "$180.00" -> 180.0
+	var targetPriceScore float64
 	if targetFrom > 0 && targetTo > targetFrom {
 		priceIncrease := ((targetTo - targetFrom) / targetFrom) * 100 // Calculate % increase
 		// SCORING TIERS based on price increase magnitude:
 		if priceIncrease > 20 {
-			score += 3.0 // MAJOR BOOST: >20% increase (e.g., $100->$125 = 25%)
+			targetPriceScore = 3.0 // MAJOR BOOST: >20% increase
 		} else if priceIncrease > 10 {
-			score += 2.0 // GOOD BOOST: 10-20% increase (e.g., $100->$115 = 15%)
+			targetPriceScore = 2.0 // GOOD BOOST: 10-20% increase
 		} else if priceIncrease > 5 {
-			score += 1.0 // SMALL BOOST: 5-10% increase (e.g., $100->$107 = 7%)
+			targetPriceScore = 1.0 // SMALL BOOST: 5-10% increase
 		}
-		// Note: 0-5% increases get no bonus (considered normal volatility)
 	} else if targetTo < targetFrom {
-		score -= 2.0 // PENALTY: Price target was LOWERED (bearish signal)
+		targetPriceScore = -2.0 // PENALTY: Price target was LOWERED
 	}
+	score += targetPriceScore * weights.TargetPriceWeight // Apply configurable weight
 
-	// ⭐ CRITERION 2: RATING ANALYSIS (30% WEIGHT - SECOND MOST IMPORTANT)
-	// Why 30%? Analyst ratings reflect professional opinion and research
+	// ⭐ CRITERION 2: RATING ANALYSIS (CONFIGURABLE WEIGHT)
+	// Analyst ratings reflect professional opinion and research
+	var ratingScore float64
 	if isRatingImprovement(stock.RatingFrom, stock.RatingTo) {
-		score += 2.0 // UPGRADE BONUS: "Hold" -> "Buy" or "Buy" -> "Strong Buy"
+		ratingScore += 2.0 // UPGRADE BONUS: "Hold" -> "Buy" or "Buy" -> "Strong Buy"
 	}
 	// CURRENT RATING BONUSES (based on final rating strength):
 	if isStrongBuyRating(stock.RatingTo) {
-		score += 1.5 // STRONG BUY: Highest confidence rating
+		ratingScore += 1.5 // STRONG BUY: Highest confidence rating
 	} else if isBuyRating(stock.RatingTo) {
-		score += 1.0 // BUY: Positive rating
+		ratingScore += 1.0 // BUY: Positive rating
 	}
-	// Note: Hold/Neutral ratings get no bonus, Sell ratings would get penalty
+	score += ratingScore * weights.RatingWeight // Apply configurable weight
 
-	// 📊 CRITERION 3: ACTION ANALYSIS (20% WEIGHT - THIRD MOST IMPORTANT)
-	// Why 20%? Actions indicate the direction and confidence of analyst changes
+	// 📊 CRITERION 3: ACTION ANALYSIS (CONFIGURABLE WEIGHT)
+	// Actions indicate the direction and confidence of analyst changes
+	var actionScore float64
 	action := strings.ToLower(stock.Action)
 	if strings.Contains(action, "raised") || strings.Contains(action, "upgrade") {
-		score += 1.5 // POSITIVE ACTIONS: "target raised", "rating upgraded"
+		actionScore = 1.5 // POSITIVE ACTIONS: "target raised", "rating upgraded"
 	} else if strings.Contains(action, "initiated") && isBuyRating(stock.RatingTo) {
-		score += 1.0 // NEW COVERAGE: Fresh analyst starts covering with Buy rating
+		actionScore = 1.0 // NEW COVERAGE: Fresh analyst starts covering with Buy rating
 	} else if strings.Contains(action, "lowered") || strings.Contains(action, "downgrade") {
-		score -= 1.5 // NEGATIVE ACTIONS: "target lowered", "rating downgraded"
+		actionScore = -1.5 // NEGATIVE ACTIONS: "target lowered", "rating downgraded"
 	}
-	// Examples: "target raised by Goldman Sachs" = +1.5, "target lowered by Morgan Stanley" = -1.5
+	score += actionScore * weights.ActionWeight // Apply configurable weight
 
-	// ⏰ CRITERION 4: RECENT ACTIVITY BONUS (10% WEIGHT - TIMING FACTOR)
-	// Why 10%? Recent activity indicates current market relevance
-	if time.Since(stock.CreatedAt).Hours() < 24 {
-		score += 0.5 // FRESHNESS BONUS: Analysis is less than 24 hours old
+	// ⏰ CRITERION 4: RECENT ACTIVITY BONUS (CONFIGURABLE WEIGHT)
+	// Recent analyst reports indicate current market relevance
+	var timingScore float64
+	analystTime, err := time.Parse("2006-01-02 15:04:05", stock.Time)
+	if err == nil && time.Since(analystTime).Hours() < 24 {
+		timingScore += 0.5 // FRESHNESS BONUS: Analyst report is less than 24 hours old
 	}
-
-	// 📈 BONUS: MULTIPLE ANALYST COVERAGE
-	// More analysts = more confidence in the analysis
-	if len(history) > 2 {
-		score += 0.5 // CONSENSUS BONUS: 3+ analysts have opinions on this stock
+	// MULTIPLE ANALYST COVERAGE BONUS
+	if len(history) > 1 {
+		timingScore += 0.5 // CONSENSUS BONUS: 2+ analysts have opinions on this stock
 	}
+	score += timingScore * weights.TimingWeight // Apply configurable weight
 
 	// FINAL SCORE CAPPING: Ensure score stays within valid range
 	return math.Min(10.0, math.Max(0.0, score)) // Cap between 0-10 (no negative or >10 scores)
@@ -1039,7 +1069,7 @@ func (h *StockHandler) getRecommendationsForSummary() []StockRecommendation {
 		       target_from, target_to, time, created_at
 		FROM stock_ratings 
 		WHERE ticker IS NOT NULL AND company IS NOT NULL
-		ORDER BY created_at DESC
+		ORDER BY time DESC
 		LIMIT 50`
 
 	// Fetch data from database
@@ -1053,9 +1083,10 @@ func (h *StockHandler) getRecommendationsForSummary() []StockRecommendation {
 	var stocks []stockData
 	for rows.Next() {
 		var stock stockData
+		var createdAt time.Time // Scan but don't use for analysis
 		err := rows.Scan(&stock.Ticker, &stock.Company, &stock.Action, &stock.Brokerage,
 			&stock.RatingFrom, &stock.RatingTo, &stock.TargetFrom, &stock.TargetTo,
-			&stock.Time, &stock.CreatedAt)
+			&stock.Time, &createdAt)
 		if err != nil {
 			continue
 		}
