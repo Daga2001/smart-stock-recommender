@@ -288,9 +288,9 @@ export const StockDashboard = ({
         </div>
 
         {/* AI Assistant Section */}
-        {/* <div className="mb-12 animate-slide-up" style={{ animationDelay: '0.4s' }}>
+        <div className="mb-12 animate-slide-up" style={{ animationDelay: '0.4s' }}>
           <AIAssistant />
-        </div> */}
+        </div>
 
         {/* Top N Recommendations Section */}
         <div className="mb-12 animate-slide-up" style={{ animationDelay: '0.5s' }}>
