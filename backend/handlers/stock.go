@@ -515,19 +515,33 @@ func (h *StockHandler) GetStockRatings(c *gin.Context) {
 	})
 }
 
-// SearchStockRatings searches stock ratings based on search term with pagination
-// @Summary Search stock ratings with pagination
-// @Description Searches through stock ratings using a search term that matches ticker, company, brokerage, action, or ratings. Returns paginated results with metadata.
+// AdvancedSearchRequest represents search parameters with filters
+type AdvancedSearchRequest struct {
+	PageNumber    int     `json:"page_number"`
+	PageLength    int     `json:"page_length"`
+	SearchTerm    string  `json:"search_term,omitempty"`
+	Action        string  `json:"action,omitempty"`
+	RatingFrom    string  `json:"rating_from,omitempty"`
+	RatingTo      string  `json:"rating_to,omitempty"`
+	TargetFromMin float64 `json:"target_from_min,omitempty"`
+	TargetFromMax float64 `json:"target_from_max,omitempty"`
+	TargetToMin   float64 `json:"target_to_min,omitempty"`
+	TargetToMax   float64 `json:"target_to_max,omitempty"`
+}
+
+// SearchStockRatings searches stock ratings with filters
+// @Summary Search stock ratings with filters
+// @Description Searches through stock ratings using filters including search term, action, ratings, and target price ranges.
 // @Tags stocks
 // @Accept json
 // @Produce json
-// @Param request body models.SearchRequest true "Search parameters with page_number (integer, min 1), page_length (integer, 1-1000), and search_term (string, required)"
-// @Success 200 {object} models.PaginatedResponse "Successfully retrieved filtered stock ratings with pagination metadata"
-// @Failure 400 {object} models.ErrorResponse "Bad request - invalid JSON, missing search_term, page_number <= 0, or page_length not between 1-1000"
-// @Failure 500 {object} models.GenericErrorResponse "Internal server error occurred"
+// @Param request body AdvancedSearchRequest true "Search parameters with filters"
+// @Success 200 {object} models.PaginatedResponse "Successfully retrieved filtered stock ratings"
+// @Failure 400 {object} models.ErrorResponse "Bad request"
+// @Failure 500 {object} models.GenericErrorResponse "Internal server error"
 // @Router /stocks/search [post]
 func (h *StockHandler) SearchStockRatings(c *gin.Context) {
-	var req models.SearchRequest
+	var req AdvancedSearchRequest
 
 	// Parse request body
 	if err := json.NewDecoder(c.Request.Body).Decode(&req); err != nil {
@@ -535,47 +549,101 @@ func (h *StockHandler) SearchStockRatings(c *gin.Context) {
 		return
 	}
 
-	// Validate search parameters
+	// Validate parameters
 	if req.PageNumber <= 0 {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "page_number must be greater than 0"})
 		return
 	}
-
-	if req.SearchTerm == "" {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "search_term is required"})
-		return
+	if req.PageLength <= 0 || req.PageLength > 1000 {
+		req.PageLength = 20
 	}
 
-	// Calculate offset for pagination
+	// Build dynamic WHERE clause
+	whereConditions := []string{}
+	args := []interface{}{}
+	argIndex := 1
+
+	// Search term filter
+	if req.SearchTerm != "" {
+		searchPattern := "%" + req.SearchTerm + "%"
+		whereConditions = append(whereConditions, fmt.Sprintf(
+			"(LOWER(ticker) LIKE LOWER($%d) OR LOWER(company) LIKE LOWER($%d) OR LOWER(brokerage) LIKE LOWER($%d) OR LOWER(action) LIKE LOWER($%d) OR LOWER(rating_from) LIKE LOWER($%d) OR LOWER(rating_to) LIKE LOWER($%d))",
+			argIndex, argIndex, argIndex, argIndex, argIndex, argIndex))
+		args = append(args, searchPattern)
+		argIndex++
+	}
+
+	// Action filter
+	if req.Action != "" && req.Action != "all" {
+		whereConditions = append(whereConditions, fmt.Sprintf("LOWER(action) = LOWER($%d)", argIndex))
+		args = append(args, req.Action)
+		argIndex++
+	}
+
+	// Rating from filter
+	if req.RatingFrom != "" && req.RatingFrom != "all" {
+		whereConditions = append(whereConditions, fmt.Sprintf("LOWER(rating_from) = LOWER($%d)", argIndex))
+		args = append(args, req.RatingFrom)
+		argIndex++
+	}
+
+	// Rating to filter
+	if req.RatingTo != "" && req.RatingTo != "all" {
+		whereConditions = append(whereConditions, fmt.Sprintf("LOWER(rating_to) = LOWER($%d)", argIndex))
+		args = append(args, req.RatingTo)
+		argIndex++
+	}
+
+	// Target price range filters
+	if req.TargetFromMin > 0 {
+		whereConditions = append(whereConditions, fmt.Sprintf("CAST(REPLACE(REPLACE(target_from, '$', ''), ',', '') AS NUMERIC) >= $%d", argIndex))
+		args = append(args, req.TargetFromMin)
+		argIndex++
+	}
+	if req.TargetFromMax > 0 {
+		whereConditions = append(whereConditions, fmt.Sprintf("CAST(REPLACE(REPLACE(target_from, '$', ''), ',', '') AS NUMERIC) <= $%d", argIndex))
+		args = append(args, req.TargetFromMax)
+		argIndex++
+	}
+	if req.TargetToMin > 0 {
+		whereConditions = append(whereConditions, fmt.Sprintf("CAST(REPLACE(REPLACE(target_to, '$', ''), ',', '') AS NUMERIC) >= $%d", argIndex))
+		args = append(args, req.TargetToMin)
+		argIndex++
+	}
+	if req.TargetToMax > 0 {
+		whereConditions = append(whereConditions, fmt.Sprintf("CAST(REPLACE(REPLACE(target_to, '$', ''), ',', '') AS NUMERIC) <= $%d", argIndex))
+		args = append(args, req.TargetToMax)
+		argIndex++
+	}
+
+	// Build WHERE clause
+	whereClause := ""
+	if len(whereConditions) > 0 {
+		whereClause = "WHERE " + strings.Join(whereConditions, " AND ")
+	}
+
+	// Calculate offset
 	offset := (req.PageNumber - 1) * req.PageLength
 
-	// Get total count for search results
-	countQuery := `
-		SELECT COUNT(*) FROM stock_ratings 
-		WHERE LOWER(ticker) LIKE LOWER($1) OR LOWER(company) LIKE LOWER($1) OR LOWER(brokerage) LIKE LOWER($1) 
-		   OR LOWER(action) LIKE LOWER($1) OR LOWER(rating_from) LIKE LOWER($1) OR LOWER(rating_to) LIKE LOWER($1)`
-	searchPattern := "%" + req.SearchTerm + "%"
-	println("🔍 Searching for:", req.SearchTerm, "| Pattern:", searchPattern)
-
+	// Get total count
+	countQuery := fmt.Sprintf("SELECT COUNT(*) FROM stock_ratings %s", whereClause)
 	var totalCount int
-	err := h.DB.QueryRow(countQuery, searchPattern).Scan(&totalCount)
+	err := h.DB.QueryRow(countQuery, args...).Scan(&totalCount)
 	if err != nil {
-		println("❌ Search count error:", err.Error())
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to get search count"})
 		return
 	}
-	println("📊 Found", totalCount, "matching records")
 
-	// Query filtered and paginated data
-	query := `
+	// Query data
+	dataQuery := fmt.Sprintf(`
 		SELECT id, ticker, target_from, target_to, company, action, brokerage, rating_from, rating_to, time, created_at
 		FROM stock_ratings
-		WHERE LOWER(ticker) LIKE LOWER($1) OR LOWER(company) LIKE LOWER($1) OR LOWER(brokerage) LIKE LOWER($1) 
-		   OR LOWER(action) LIKE LOWER($1) OR LOWER(rating_from) LIKE LOWER($1) OR LOWER(rating_to) LIKE LOWER($1)
+		%s
 		ORDER BY created_at DESC, id DESC
-		LIMIT $2 OFFSET $3`
+		LIMIT $%d OFFSET $%d`, whereClause, argIndex, argIndex+1)
 
-	rows, err := h.DB.Query(query, searchPattern, req.PageLength, offset)
+	args = append(args, req.PageLength, offset)
+	rows, err := h.DB.Query(dataQuery, args...)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to search stock ratings"})
 		return
@@ -613,13 +681,29 @@ func (h *StockHandler) SearchStockRatings(c *gin.Context) {
 			"has_next":      hasNext,
 			"has_previous":  hasPrev,
 		},
-		"search_term": req.SearchTerm,
+		"applied_filters": gin.H{
+			"search_term":     req.SearchTerm,
+			"action":          req.Action,
+			"rating_from":     req.RatingFrom,
+			"rating_to":       req.RatingTo,
+			"target_from_min": req.TargetFromMin,
+			"target_from_max": req.TargetFromMax,
+			"target_to_min":   req.TargetToMin,
+			"target_to_max":   req.TargetToMax,
+		},
 	})
 }
 
 // ActionsResponse represents the response structure for stock actions
 type ActionsResponse struct {
 	Actions []string `json:"actions" example:"initiated by,target raised by,target lowered by,reiterated by,upgraded"`
+}
+
+// FilterOptionsResponse represents available filter options
+type FilterOptionsResponse struct {
+	Actions     []string `json:"actions"`
+	RatingsFrom []string `json:"ratings_from"`
+	RatingsTo   []string `json:"ratings_to"`
 }
 
 // GetStockActions retrieves all unique action types from the database
@@ -659,6 +743,59 @@ func (h *StockHandler) GetStockActions(c *gin.Context) {
 	c.JSON(http.StatusOK, ActionsResponse{
 		Actions: actions,
 	})
+}
+
+// GetFilterOptions retrieves all available filter options
+// @Summary Get all available filter options
+// @Description Retrieves filter options including actions, ratings from database
+// @Tags stocks
+// @Produce json
+// @Success 200 {object} FilterOptionsResponse "Successfully retrieved filter options"
+// @Failure 500 {object} models.GenericErrorResponse "Internal server error occurred"
+// @Router /stocks/filter-options [get]
+func (h *StockHandler) GetFilterOptions(c *gin.Context) {
+	var response FilterOptionsResponse
+
+	// Get unique actions
+	actionsQuery := `SELECT DISTINCT action FROM stock_ratings WHERE action IS NOT NULL AND action != '' ORDER BY action ASC`
+	rows, err := h.DB.Query(actionsQuery)
+	if err == nil {
+		defer rows.Close()
+		for rows.Next() {
+			var action string
+			if err := rows.Scan(&action); err == nil {
+				response.Actions = append(response.Actions, action)
+			}
+		}
+	}
+
+	// Get unique ratings from
+	ratingsFromQuery := `SELECT DISTINCT rating_from FROM stock_ratings WHERE rating_from IS NOT NULL AND rating_from != '' ORDER BY rating_from ASC`
+	rows, err = h.DB.Query(ratingsFromQuery)
+	if err == nil {
+		defer rows.Close()
+		for rows.Next() {
+			var rating string
+			if err := rows.Scan(&rating); err == nil {
+				response.RatingsFrom = append(response.RatingsFrom, rating)
+			}
+		}
+	}
+
+	// Get unique ratings to
+	ratingsToQuery := `SELECT DISTINCT rating_to FROM stock_ratings WHERE rating_to IS NOT NULL AND rating_to != '' ORDER BY rating_to ASC`
+	rows, err = h.DB.Query(ratingsToQuery)
+	if err == nil {
+		defer rows.Close()
+		for rows.Next() {
+			var rating string
+			if err := rows.Scan(&rating); err == nil {
+				response.RatingsTo = append(response.RatingsTo, rating)
+			}
+		}
+	}
+
+	c.JSON(http.StatusOK, response)
 }
 
 // stockData represents internal stock data structure for analysis

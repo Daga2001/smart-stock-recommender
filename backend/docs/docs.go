@@ -179,6 +179,32 @@ const docTemplate = `{
                 }
             }
         },
+        "/stocks/filter-options": {
+            "get": {
+                "description": "Retrieves filter options including actions, ratings from database",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "stocks"
+                ],
+                "summary": "Get all available filter options",
+                "responses": {
+                    "200": {
+                        "description": "Successfully retrieved filter options",
+                        "schema": {
+                            "$ref": "#/definitions/handlers.FilterOptionsResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal server error occurred",
+                        "schema": {
+                            "$ref": "#/definitions/models.GenericErrorResponse"
+                        }
+                    }
+                }
+            }
+        },
         "/stocks/list": {
             "post": {
                 "description": "Retrieves stored stock ratings with pagination support, ordered by creation date (newest first). Returns both data and pagination metadata.",
@@ -294,7 +320,7 @@ const docTemplate = `{
         },
         "/stocks/search": {
             "post": {
-                "description": "Searches through stock ratings using a search term that matches ticker, company, brokerage, action, or ratings. Returns paginated results with metadata.",
+                "description": "Searches through stock ratings using filters including search term, action, ratings, and target price ranges.",
                 "consumes": [
                     "application/json"
                 ],
@@ -304,33 +330,33 @@ const docTemplate = `{
                 "tags": [
                     "stocks"
                 ],
-                "summary": "Search stock ratings with pagination",
+                "summary": "Search stock ratings with filters",
                 "parameters": [
                     {
-                        "description": "Search parameters with page_number (integer, min 1), page_length (integer, 1-1000), and search_term (string, required)",
+                        "description": "Search parameters with filters",
                         "name": "request",
                         "in": "body",
                         "required": true,
                         "schema": {
-                            "$ref": "#/definitions/models.SearchRequest"
+                            "$ref": "#/definitions/handlers.AdvancedSearchRequest"
                         }
                     }
                 ],
                 "responses": {
                     "200": {
-                        "description": "Successfully retrieved filtered stock ratings with pagination metadata",
+                        "description": "Successfully retrieved filtered stock ratings",
                         "schema": {
                             "$ref": "#/definitions/models.PaginatedResponse"
                         }
                     },
                     "400": {
-                        "description": "Bad request - invalid JSON, missing search_term, page_number \u003c= 0, or page_length not between 1-1000",
+                        "description": "Bad request",
                         "schema": {
                             "$ref": "#/definitions/models.ErrorResponse"
                         }
                     },
                     "500": {
-                        "description": "Internal server error occurred",
+                        "description": "Internal server error",
                         "schema": {
                             "$ref": "#/definitions/models.GenericErrorResponse"
                         }
@@ -381,6 +407,41 @@ const docTemplate = `{
                         "reiterated by",
                         "upgraded"
                     ]
+                }
+            }
+        },
+        "handlers.AdvancedSearchRequest": {
+            "type": "object",
+            "properties": {
+                "action": {
+                    "type": "string"
+                },
+                "page_length": {
+                    "type": "integer"
+                },
+                "page_number": {
+                    "type": "integer"
+                },
+                "rating_from": {
+                    "type": "string"
+                },
+                "rating_to": {
+                    "type": "string"
+                },
+                "search_term": {
+                    "type": "string"
+                },
+                "target_from_max": {
+                    "type": "number"
+                },
+                "target_from_min": {
+                    "type": "number"
+                },
+                "target_to_max": {
+                    "type": "number"
+                },
+                "target_to_min": {
+                    "type": "number"
                 }
             }
         },
@@ -439,6 +500,29 @@ const docTemplate = `{
                 },
                 "summary": {
                     "type": "string"
+                }
+            }
+        },
+        "handlers.FilterOptionsResponse": {
+            "type": "object",
+            "properties": {
+                "actions": {
+                    "type": "array",
+                    "items": {
+                        "type": "string"
+                    }
+                },
+                "ratings_from": {
+                    "type": "array",
+                    "items": {
+                        "type": "string"
+                    }
+                },
+                "ratings_to": {
+                    "type": "array",
+                    "items": {
+                        "type": "string"
+                    }
                 }
             }
         },
@@ -791,28 +875,6 @@ const docTemplate = `{
                 "page_number": {
                     "type": "integer",
                     "example": 1
-                }
-            }
-        },
-        "models.SearchRequest": {
-            "type": "object",
-            "required": [
-                "page_length",
-                "page_number",
-                "search_term"
-            ],
-            "properties": {
-                "page_length": {
-                    "type": "integer",
-                    "example": 20
-                },
-                "page_number": {
-                    "type": "integer",
-                    "example": 1
-                },
-                "search_term": {
-                    "type": "string",
-                    "example": "AAPL"
                 }
             }
         },

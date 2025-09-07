@@ -343,8 +343,6 @@ The AI assistant works best with **specific, detailed questions**. Here's how to
 - [x] **Dynamic Recommendations** – Flexible Top N display with pagination persistence
 - [x] **Interactive AI Chat** – Real-time market discussion and analysis capabilities
 - [x] **Unit Testing** – tests for backend and frontend components
-- [ ] Implement caching for API requests  
-- [ ] Add authentication for UI users  
 - [ ] Enhance recommendation algorithm with external data sources  
 - [ ] Deploy to cloud (Render / Vercel / Fly.io)  
 

@@ -52,13 +52,33 @@ export const StockDashboard = ({
       const saved = localStorage.getItem('stockFilters');
       if (saved) {
         try {
-          return JSON.parse(saved);
+          const parsed = JSON.parse(saved);
+          // Ensure all new filter properties exist
+          return {
+            search: parsed.search || '',
+            action: parsed.action || 'all',
+            rating_from: parsed.rating_from || 'all',
+            rating_to: parsed.rating_to || 'all',
+            target_from_min: parsed.target_from_min || 0,
+            target_from_max: parsed.target_from_max || 0,
+            target_to_min: parsed.target_to_min || 0,
+            target_to_max: parsed.target_to_max || 0
+          };
         } catch (e) {
           // Ignore parsing errors
         }
       }
     }
-    return { search: '', action: 'all' };
+    return { 
+      search: '', 
+      action: 'all',
+      rating_from: 'all',
+      rating_to: 'all',
+      target_from_min: 0,
+      target_from_max: 0,
+      target_to_min: 0,
+      target_to_max: 0
+    };
   };
 
   const [filters, setFilters] = useState<StockFilters>(getInitialFilters);
@@ -283,21 +303,43 @@ export const StockDashboard = ({
             filters={filters} 
             onFiltersChange={handleActionFilterChange}
             onApplyFilter={() => {
-              const searchTerm = filters.search.trim();
-              setAppliedSearch(searchTerm);
               // Save current filters to localStorage
               localStorage.setItem('stockFilters', JSON.stringify(filters));
-              // Immediately trigger the refresh with the search term and reset to page 1
-              if (searchTerm) {
-                onRefresh?.(searchTerm, true); // true = reset to page 1
-              } else {
-                onRefresh?.('', true); // true = reset to page 1
-              }
+              
+              // Build search request with all filters
+              const searchRequest = {
+                page_number: 1,
+                page_length: pageLength,
+                search_term: filters.search.trim(),
+                action: filters.action !== 'all' ? filters.action : '',
+                rating_from: filters.rating_from !== 'all' ? filters.rating_from : '',
+                rating_to: filters.rating_to !== 'all' ? filters.rating_to : '',
+                target_from_min: filters.target_from_min || 0,
+                target_from_max: filters.target_from_max || 0,
+                target_to_min: filters.target_to_min || 0,
+                target_to_max: filters.target_to_max || 0
+              };
+              
+              setAppliedSearch(filters.search.trim());
+              // Use advanced search with all filters
+              onRefresh?.(JSON.stringify(searchRequest), true); // true = reset to page 1
             }}
             onClearAll={() => {
               setAppliedSearch('');
               // Clear localStorage
               localStorage.removeItem('stockFilters');
+              // Reset filters to default
+              const defaultFilters = {
+                search: '', 
+                action: 'all',
+                rating_from: 'all',
+                rating_to: 'all',
+                target_from_min: 0,
+                target_from_max: 0,
+                target_to_min: 0,
+                target_to_max: 0
+              };
+              setFilters(defaultFilters);
               // Refresh with empty search to show all data and reset to page 1
               onRefresh?.('', true); // true = reset to page 1
             }}

@@ -1,4 +1,5 @@
 import { API_CONFIG, StockListResponse, PaginationRequest, SearchRequest, RecommendationsResponse } from '../config/api';
+import { FilterOptions } from '../types/stock';
 
 /**
  * Service class to interact with the stock-related API endpoints.
@@ -52,6 +53,22 @@ class StockService {
 
     if (!response.ok) {
       throw new Error(`Failed to fetch stock actions: ${response.statusText}`);
+    }
+
+    return response.json();
+  }
+
+  // Method to fetch all filter options
+  async getFilterOptions(): Promise<FilterOptions> {
+    const response = await fetch(`${this.baseUrl}/api/stocks/filter-options`, {
+      method: 'GET',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+    });
+
+    if (!response.ok) {
+      throw new Error(`Failed to fetch filter options: ${response.statusText}`);
     }
 
     return response.json();

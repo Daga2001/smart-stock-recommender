@@ -116,20 +116,83 @@ export const useStockData = (initialPageNumber = 1, initialPageLength = 20) => {
 
   const handleRefresh = (search?: string, resetToPageOne?: boolean) => {
     if (search !== undefined) {
-      const newSearchMode = search.length > 0;
-      setSearchFilter(search);
-      setIsSearchMode(newSearchMode);
-      if (resetToPageOne || search === '') {
-        // Reset to page 1 for new search or clear
-        updatePageNumber(1);
-        fetchStockData(search, newSearchMode, 1);
+      // Check if search is a JSON string (advanced search) or regular search
+      let isAdvancedSearch = false;
+      let searchRequest = null;
+      
+      try {
+        searchRequest = JSON.parse(search);
+        isAdvancedSearch = true;
+      } catch {
+        // Not JSON, treat as regular search
+        isAdvancedSearch = false;
+      }
+      
+      if (isAdvancedSearch && searchRequest) {
+        // Advanced search with filters
+        setIsSearchMode(true);
+        setSearchFilter(search); // Store the full JSON request
+        if (resetToPageOne) {
+          updatePageNumber(1);
+          fetchAdvancedStockData(searchRequest, 1);
+        } else {
+          fetchAdvancedStockData(searchRequest, pageNumber);
+        }
       } else {
-        // Use current page number for search
-        fetchStockData(search, newSearchMode, pageNumber);
+        // Regular search
+        const newSearchMode = search.length > 0;
+        setSearchFilter(search);
+        setIsSearchMode(newSearchMode);
+        if (resetToPageOne || search === '') {
+          updatePageNumber(1);
+          fetchStockData(search, newSearchMode, 1);
+        } else {
+          fetchStockData(search, newSearchMode, pageNumber);
+        }
       }
     } else {
-      // Use current page number for refresh
       fetchStockData(undefined, undefined, pageNumber);
+    }
+  };
+
+  // Function to fetch stock data with advanced filters
+  const fetchAdvancedStockData = async (searchRequest: any, forcePageNumber?: number) => {
+    setLoading(true);
+    setError(null);
+    
+    try {
+      const currentPageNumber = forcePageNumber !== undefined ? forcePageNumber : pageNumber;
+      
+      // Update page number in request
+      const requestWithPage = {
+        ...searchRequest,
+        page_number: currentPageNumber,
+        page_length: pageLength
+      };
+      
+      console.log('🔍 Advanced search request:', requestWithPage);
+      
+      const response = await fetch(`${API_CONFIG.BASE_URL}/api/stocks/search`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(requestWithPage),
+      });
+      
+      if (!response.ok) {
+        throw new Error('Advanced search failed');
+      }
+      
+      const data = await response.json();
+      setStockData(data.data || []);
+      setPagination(data.pagination);
+      
+      if (data.pagination && data.pagination.page_number) {
+        updatePageNumber(data.pagination.page_number);
+      }
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to fetch stock data');
+    } finally {
+      setLoading(false);
     }
   };
 
@@ -156,5 +219,6 @@ export const useStockData = (initialPageNumber = 1, initialPageLength = 20) => {
     isSearchMode,
     searchFilter,
     refetch: fetchStockData,
+    fetchAdvancedStockData,
   };
 };

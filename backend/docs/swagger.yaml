@@ -13,6 +13,29 @@ definitions:
           type: string
         type: array
     type: object
+  handlers.AdvancedSearchRequest:
+    properties:
+      action:
+        type: string
+      page_length:
+        type: integer
+      page_number:
+        type: integer
+      rating_from:
+        type: string
+      rating_to:
+        type: string
+      search_term:
+        type: string
+      target_from_max:
+        type: number
+      target_from_min:
+        type: number
+      target_to_max:
+        type: number
+      target_to_min:
+        type: number
+    type: object
   handlers.ChatRequest:
     properties:
       conversation_memory:
@@ -53,6 +76,21 @@ definitions:
         type: string
       summary:
         type: string
+    type: object
+  handlers.FilterOptionsResponse:
+    properties:
+      actions:
+        items:
+          type: string
+        type: array
+      ratings_from:
+        items:
+          type: string
+        type: array
+      ratings_to:
+        items:
+          type: string
+        type: array
     type: object
   handlers.RecentMessage:
     properties:
@@ -302,22 +340,6 @@ definitions:
     - page_length
     - page_number
     type: object
-  models.SearchRequest:
-    properties:
-      page_length:
-        example: 20
-        type: integer
-      page_number:
-        example: 1
-        type: integer
-      search_term:
-        example: AAPL
-        type: string
-    required:
-    - page_length
-    - page_number
-    - search_term
-    type: object
   models.StockRatings:
     properties:
       action:
@@ -492,6 +514,23 @@ paths:
       summary: Chat with AI about stock market with database context
       tags:
       - ai-analysis
+  /stocks/filter-options:
+    get:
+      description: Retrieves filter options including actions, ratings from database
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Successfully retrieved filter options
+          schema:
+            $ref: '#/definitions/handlers.FilterOptionsResponse'
+        "500":
+          description: Internal server error occurred
+          schema:
+            $ref: '#/definitions/models.GenericErrorResponse'
+      summary: Get all available filter options
+      tags:
+      - stocks
   /stocks/list:
     post:
       consumes:
@@ -579,35 +618,31 @@ paths:
     post:
       consumes:
       - application/json
-      description: Searches through stock ratings using a search term that matches
-        ticker, company, brokerage, action, or ratings. Returns paginated results
-        with metadata.
+      description: Searches through stock ratings using filters including search term,
+        action, ratings, and target price ranges.
       parameters:
-      - description: Search parameters with page_number (integer, min 1), page_length
-          (integer, 1-1000), and search_term (string, required)
+      - description: Search parameters with filters
         in: body
         name: request
         required: true
         schema:
-          $ref: '#/definitions/models.SearchRequest'
+          $ref: '#/definitions/handlers.AdvancedSearchRequest'
       produces:
       - application/json
       responses:
         "200":
-          description: Successfully retrieved filtered stock ratings with pagination
-            metadata
+          description: Successfully retrieved filtered stock ratings
           schema:
             $ref: '#/definitions/models.PaginatedResponse'
         "400":
-          description: Bad request - invalid JSON, missing search_term, page_number
-            <= 0, or page_length not between 1-1000
+          description: Bad request
           schema:
             $ref: '#/definitions/models.ErrorResponse'
         "500":
-          description: Internal server error occurred
+          description: Internal server error
           schema:
             $ref: '#/definitions/models.GenericErrorResponse'
-      summary: Search stock ratings with pagination
+      summary: Search stock ratings with filters
       tags:
       - stocks
   /stocks/summary:
