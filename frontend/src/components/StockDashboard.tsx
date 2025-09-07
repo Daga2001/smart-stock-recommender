@@ -143,13 +143,13 @@ export const StockDashboard = ({
                 </div>
               </div>
             </div>
-            <div className="text-right animate-scale-in">
+            {/* <div className="text-right animate-scale-in">
               <div className="text-3xl font-bold text-primary font-mono">{stats.totalStocks}</div>
-              <div className="text-sm text-muted-foreground font-medium">Active Positions</div>
+              <div className="text-sm text-muted-foreground font-medium">Total Ratings</div>
               <div className={`text-sm font-semibold mt-1 ${stats.avgPriceChange >= 0 ? 'text-success' : 'text-destructive'}`}>
-                {stats.avgPriceChange >= 0 ? '+' : ''}{stats.avgPriceChange.toFixed(2)}% Avg Change
+                {stats.avgPriceChange >= 0 ? '+' : ''}{stats.avgPriceChange.toFixed(2)}% Avg Target Change
               </div>
-            </div>
+            </div> */}
           </div>
         </div>
       </div>
@@ -160,7 +160,7 @@ export const StockDashboard = ({
           <div>
             <h2 className="text-xl font-semibold mb-2">Market Analytics Overview</h2>
             <p className="text-muted-foreground text-sm">
-              Statistical analysis of brokerage actions based on target price changes and rating adjustments
+              Statistical analysis of brokerage actions from the current page, based on target price changes and rating adjustments
             </p>
           </div>
           
