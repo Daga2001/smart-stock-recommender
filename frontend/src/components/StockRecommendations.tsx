@@ -20,13 +20,19 @@ export const StockRecommendations = ({}: StockRecommendationsProps) => {
   const [recommendations, setRecommendations] = useState<StockRecommendation[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [limit, setLimit] = useState(3);
 
   const loadRecommendations = async () => {
     setLoading(true);
     setError(null);
     try {
-      const response = await stockService.getStockRecommendations();
-      setRecommendations(response.recommendations.slice(0, 3)); // Top 3 only
+      const response = await fetch(`http://localhost:8081/api/stocks/recommendations?limit=${limit}`);
+      if (response.ok) {
+        const data = await response.json();
+        setRecommendations(data.recommendations);
+      } else {
+        throw new Error('Failed to fetch recommendations');
+      }
     } catch (err) {
       setError('Failed to load recommendations');
       console.error('Failed to load recommendations:', err);
@@ -37,7 +43,7 @@ export const StockRecommendations = ({}: StockRecommendationsProps) => {
 
   useEffect(() => {
     loadRecommendations();
-  }, []);
+  }, [limit]);
 
   const getRecommendationReason = (rec: StockRecommendation) => {
     return rec.reason || 'Quantitative analysis indicates strong potential';
@@ -70,25 +76,37 @@ export const StockRecommendations = ({}: StockRecommendationsProps) => {
           </div>
           <div>
             <h2 className="text-2xl font-bold flex items-center gap-2">
-              Top 3 Analyst Recommendations
+              Top {limit} Analyst Recommendations
               <TrendingUp className="h-5 w-5 text-primary animate-pulse" />
             </h2>
             <p className="text-muted-foreground text-sm leading-relaxed">
-              Quantitative algorithm considers: <span className="font-semibold">Target price changes</span>, <span className="font-semibold">Rating improvements</span> (Buy, Outperform), and <span className="font-semibold">Analyst sentiment</span>
+              Quantitative algorithm considers: <span className="font-semibold">Target price changes</span>, <span className="font-semibold">Rating improvements</span> (Buy, Outperform), and <span className="font-semibold">Recent activity</span>
             </p>
           </div>
         </div>
-        <div className="text-right">
-          <Button 
-            onClick={loadRecommendations} 
-            variant="outline" 
-            size="sm"
-            disabled={loading}
-            className="mb-2"
-          >
-            <RefreshCw className={`h-4 w-4 mr-2 ${loading ? 'animate-spin' : ''}`} />
-            {loading ? 'Loading...' : 'Refresh'}
-          </Button>
+        <div className="text-right space-y-2">
+          <div className="flex items-center gap-2">
+            <select
+              value={limit}
+              onChange={(e) => setLimit(parseInt(e.target.value))}
+              className="px-3 py-1 glass-card border border-border/50 rounded-lg text-sm font-medium focus:ring-2 focus:ring-primary/50 focus:border-primary transition-all duration-200 hover:shadow-premium cursor-pointer"
+            >
+              <option value={3}>Top 3</option>
+              <option value={5}>Top 5</option>
+              <option value={10}>Top 10</option>
+              <option value={15}>Top 15</option>
+              <option value={20}>Top 20</option>
+            </select>
+            <Button 
+              onClick={loadRecommendations} 
+              variant="outline" 
+              size="sm"
+              disabled={loading}
+            >
+              <RefreshCw className={`h-4 w-4 mr-2 ${loading ? 'animate-spin' : ''}`} />
+              {loading ? 'Loading...' : 'Refresh'}
+            </Button>
+          </div>
           <div className="text-xs text-muted-foreground">
             Quantitative analysis
           </div>
@@ -127,7 +145,7 @@ export const StockRecommendations = ({}: StockRecommendationsProps) => {
         }
         
         return (
-          <div className="grid gap-6 md:grid-cols-3">
+          <div className={`grid gap-6 ${limit <= 3 ? 'md:grid-cols-3' : limit <= 5 ? 'md:grid-cols-2 lg:grid-cols-3' : 'md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4'}`}>
           {recommendations.map((rec, index) => {
             return (
             <Card 

@@ -102,6 +102,7 @@ export const StockDashboard = ({
         s.rating_to.toLowerCase().includes('outperform')
       )
     ).length;
+    const uniqueTickers = new Set(stocks.map(s => s.ticker)).size;
     
     const validStocks = stocks.filter(s => s.target_to && s.target_from);
     const avgPriceChange = validStocks.length > 0 ? validStocks.reduce((sum, stock) => {
@@ -116,6 +117,7 @@ export const StockDashboard = ({
       targetsRaised,
       targetsLowered,
       buyRatings,
+      uniqueTickers,
       avgPriceChange
     };
   }, [stocks]);
@@ -154,10 +156,21 @@ export const StockDashboard = ({
 
       {/* Enhanced Statistics Dashboard */}
       <div className="container mx-auto px-6 py-8">
-        <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-4 mb-12">
+        <div className="space-y-4 mb-12">
+          <div>
+            <h2 className="text-xl font-semibold mb-2">Market Analytics Overview</h2>
+            <p className="text-muted-foreground text-sm">
+              Real-time analysis of analyst actions and market sentiment based on target price changes and rating adjustments
+            </p>
+          </div>
+          
+          <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-4">
           <Card className="glass-card hover:shadow-premium transition-all duration-300 hover:scale-105 animate-fade-in group">
             <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-3">
-              <CardTitle className="text-sm font-medium text-muted-foreground">Targets Raised</CardTitle>
+              <div>
+                <CardTitle className="text-sm font-medium text-muted-foreground">Targets Raised</CardTitle>
+                <CardDescription className="text-xs mt-1">Analysts increased price expectations</CardDescription>
+              </div>
               <div className="p-2 rounded-lg bg-success/20 group-hover:animate-pulse-green">
                 <TrendingUp className="h-5 w-5 text-success" />
               </div>
@@ -166,7 +179,7 @@ export const StockDashboard = ({
               <div className="text-3xl font-bold text-success mb-1">{stats.targetsRaised}</div>
               <p className="text-xs text-muted-foreground flex items-center gap-1">
                 <Target className="h-3 w-3" />
-                Bullish analyst revisions
+                Bullish market signals
               </p>
               <div className="mt-2 h-1 bg-muted rounded-full overflow-hidden">
                 <div 
@@ -179,7 +192,10 @@ export const StockDashboard = ({
           
           <Card className="glass-card hover:shadow-premium transition-all duration-300 hover:scale-105 animate-fade-in group" style={{ animationDelay: '0.1s' }}>
             <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-3">
-              <CardTitle className="text-sm font-medium text-muted-foreground">Targets Lowered</CardTitle>
+              <div>
+                <CardTitle className="text-sm font-medium text-muted-foreground">Targets Lowered</CardTitle>
+                <CardDescription className="text-xs mt-1">Analysts reduced price expectations</CardDescription>
+              </div>
               <div className="p-2 rounded-lg bg-destructive/20">
                 <TrendingDown className="h-5 w-5 text-destructive" />
               </div>
@@ -188,7 +204,7 @@ export const StockDashboard = ({
               <div className="text-3xl font-bold text-destructive mb-1">{stats.targetsLowered}</div>
               <p className="text-xs text-muted-foreground flex items-center gap-1">
                 <Target className="h-3 w-3" />
-                Bearish analyst revisions
+                Bearish market signals
               </p>
               <div className="mt-2 h-1 bg-muted rounded-full overflow-hidden">
                 <div 
@@ -201,7 +217,10 @@ export const StockDashboard = ({
           
           <Card className="glass-card hover:shadow-premium transition-all duration-300 hover:scale-105 animate-fade-in group" style={{ animationDelay: '0.2s' }}>
             <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-3">
-              <CardTitle className="text-sm font-medium text-muted-foreground">Buy Ratings</CardTitle>
+              <div>
+                <CardTitle className="text-sm font-medium text-muted-foreground">Buy Ratings</CardTitle>
+                <CardDescription className="text-xs mt-1">Stocks with Buy/Outperform ratings</CardDescription>
+              </div>
               <div className="p-2 rounded-lg bg-primary/20 group-hover:animate-glow">
                 <Star className="h-5 w-5 text-primary" />
               </div>
@@ -210,7 +229,7 @@ export const StockDashboard = ({
               <div className="text-3xl font-bold text-primary mb-1">{stats.buyRatings}</div>
               <p className="text-xs text-muted-foreground flex items-center gap-1">
                 <BarChart3 className="h-3 w-3" />
-                Strong buy signals
+                Investment opportunities
               </p>
               <div className="mt-2 h-1 bg-muted rounded-full overflow-hidden">
                 <div 
@@ -223,25 +242,29 @@ export const StockDashboard = ({
           
           <Card className="glass-card hover:shadow-premium transition-all duration-300 hover:scale-105 animate-fade-in group" style={{ animationDelay: '0.3s' }}>
             <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-3">
-              <CardTitle className="text-sm font-medium text-muted-foreground">Active Filter</CardTitle>
+              <div>
+                <CardTitle className="text-sm font-medium text-muted-foreground">Unique Tickers</CardTitle>
+                <CardDescription className="text-xs mt-1">Different companies being analyzed</CardDescription>
+              </div>
               <div className="p-2 rounded-lg bg-accent/20">
-                <Users className="h-5 w-5 text-accent-foreground" />
+                <BarChart3 className="h-5 w-5 text-accent-foreground" />
               </div>
             </CardHeader>
             <CardContent>
-              <div className="text-3xl font-bold mb-1">{filteredStocks.length}</div>
+              <div className="text-3xl font-bold mb-1">{stats.uniqueTickers}</div>
               <p className="text-xs text-muted-foreground flex items-center gap-1">
                 <DollarSign className="h-3 w-3" />
-                Matching your criteria
+                Market coverage
               </p>
               <div className="mt-2 h-1 bg-muted rounded-full overflow-hidden">
                 <div 
                   className="h-full bg-accent-foreground transition-all duration-1000 ease-out"
-                  style={{ width: `${(filteredStocks.length / stats.totalStocks) * 100}%` }}
+                  style={{ width: `${Math.min((stats.uniqueTickers / 100) * 100, 100)}%` }}
                 />
               </div>
             </CardContent>
           </Card>
+          </div>
         </div>
 
         {/* AI Assistant Section */}

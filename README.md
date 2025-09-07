@@ -9,14 +9,17 @@ The system also provides intelligent stock recommendations to help users identif
 
 - 🔗 **External API Integration** – Securely connects to the stock data API with proper authentication and error handling.  
 - 🗄️ **Reliable Data Storage** – Persists data in CockroachDB for scalability and fault tolerance.  
-- ⚡ **High-Performance Backend** – Go server with parallel processing and optimized database operations.  
+- ⚡ **High-Performance Backend** – Go server with parallel processing when fetching data from an API endpoint assigned for this challenge.  
 - 🚀 **Parallel Data Fetching** – Concurrent API calls with rate limiting and retry logic for maximum efficiency.  
 - 📝 **Interactive API Documentation** – Auto-generated Swagger docs with try-it-out functionality.  
 - 🎨 **Interactive UI** – Built with Vue 3, TypeScript, Pinia, and styled with Tailwind CSS.  
 - 🔍 **Advanced Search & Filter** – RegEx-powered search across all fields in a stock information dataset (ticker, company, brokerage, action, ratings).  
-- 📊 **Sorting Options** – Sort by rating, target price, or analyst action.  
-- 🤖 **Recommendation Engine** – Analyzes stock performance trends and suggests top picks.  
-- 🔄 **Real-time Filtering** – Case-insensitive search with instant results and pagination.  
+- 📊 **Comprehensive Dashboard** – Market analytics overview with statistics cards, unique tickers tracking, and professional insights.  
+- 🤖 **Statistical Recommendations** – Configurable weighted scoring system analyzing target price changes (40%), rating analysis (30%), action analysis (20%), and timing factors (10%).  
+- 🎯 **Dynamic Top N Recommendations** – Flexible recommendation display (3, 5, 10, 15, 20 picks) with responsive grid layout.  
+- 🧠 **AI Market Analysis** – GPT-4.1-nano powered market summaries with Wall Street analyst-level insights and interactive chat functionality.  
+- ⚖️ **Weight Validation** – Ensures recommendation algorithm weights sum to 100% for accurate scoring.  
+- 🔄 **Filtering** – Case-insensitive search with instant results and pagination persistence.  
 - 🔒 **SQL Injection Protection** – Parameterized queries and input validation for security.  
 - 🧪 **Unit Testing** – Ensures stability and reliability of backend and UI logic.  
 
@@ -233,14 +236,13 @@ swag init
 | `DB_PASSWORD` | Database password | `your-database-password` |
 | `DB_NAME` | Database name | `stock-market-db` |
 | `DB_SSLMODE` | SSL connection mode | `require` |
-| `API_TOKEN` | External stock API authentication token | `eyJhbGciOiJIUzI1NiIs...` |
+| `API_TOKEN` | External stock API authentication token (assigned for this challenge) | `eyJhbGciOiJIUzI1NiIs...` |
+| `OPENAI_API_KEY` | OpenAI API key for AI market analysis and chat | `sk-proj-...` |
 | `PORT` | Backend server port | `8081` |
 
 ### Frontend Environment Variables (`frontend/.env`)
 
-| Variable | Description | Example |
-|----------|-------------|----------|
-| `VITE_STOCK_API_TOKEN` | External stock API token (Vite prefix required) | `eyJhbGciOiJIUzI1NiIs...` |
+**NOTE:** by the moment there're no environment variables required for the frontend server.
 
 ---
 
@@ -250,6 +252,11 @@ swag init
 - [x] **Swagger Documentation** – Auto-generated interactive API docs
 - [x] **SQL Injection Protection** – Parameterized queries and input validation
 - [x] **Hot Reload Development** – Air tool for automatic server restarts
+- [x] **Statistical Recommendations** – Configurable weighted scoring algorithm with validation
+- [x] **Market Analytics Dashboard** – Professional statistics overview with unique tickers tracking
+- [x] **AI Market Analysis** – GPT-4.1-nano integration with Wall Street analyst-level insights
+- [x] **Dynamic Recommendations** – Flexible Top N display with pagination persistence
+- [x] **Interactive AI Chat** – Real-time market discussion and analysis capabilities
 - [ ] Implement caching for API requests  
 - [ ] Add authentication for UI users  
 - [ ] Enhance recommendation algorithm with external data sources  
