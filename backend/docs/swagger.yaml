@@ -1,0 +1,667 @@
+basePath: /api
+definitions:
+  handlers.ActionsResponse:
+    properties:
+      actions:
+        example:
+        - initiated by
+        - target raised by
+        - target lowered by
+        - reiterated by
+        - upgraded
+        items:
+          type: string
+        type: array
+    type: object
+  handlers.AdvancedSearchRequest:
+    properties:
+      action:
+        type: string
+      page_length:
+        type: integer
+      page_number:
+        type: integer
+      rating_from:
+        type: string
+      rating_to:
+        type: string
+      search_term:
+        type: string
+      target_from_max:
+        type: number
+      target_from_min:
+        type: number
+      target_to_max:
+        type: number
+      target_to_min:
+        type: number
+    type: object
+  handlers.ChatRequest:
+    properties:
+      conversation_memory:
+        $ref: '#/definitions/handlers.ConversationMemory'
+      message:
+        example: What are the best stocks to invest in today?
+        type: string
+      recent_messages:
+        items:
+          $ref: '#/definitions/handlers.RecentMessage'
+        type: array
+    type: object
+  handlers.ChatResponse:
+    properties:
+      context_used:
+        type: string
+      generated_at:
+        example: "2024-01-15T10:30:00Z"
+        type: string
+      response:
+        example: Based on current market data, I recommend focusing on stocks with
+          strong buy ratings and recent target price increases. The biotech sector
+          shows particular promise.
+        type: string
+      tokens_used:
+        example: 156
+        type: integer
+      updated_memory:
+        $ref: '#/definitions/handlers.ConversationMemory'
+    type: object
+  handlers.ConversationMemory:
+    properties:
+      key_topics:
+        items:
+          type: string
+        type: array
+      last_context:
+        type: string
+      summary:
+        type: string
+    type: object
+  handlers.FilterOptionsResponse:
+    properties:
+      actions:
+        items:
+          type: string
+        type: array
+      ratings_from:
+        items:
+          type: string
+        type: array
+      ratings_to:
+        items:
+          type: string
+        type: array
+    type: object
+  handlers.RecentMessage:
+    properties:
+      content:
+        type: string
+      role:
+        type: string
+    type: object
+  handlers.RecommendationsResponse:
+    properties:
+      generated_at:
+        example: "2024-01-15T10:30:00Z"
+        type: string
+      recommendations:
+        items:
+          $ref: '#/definitions/handlers.StockRecommendation'
+        type: array
+      total_analyzed:
+        example: 1250
+        type: integer
+    type: object
+  handlers.StockRecommendation:
+    properties:
+      brokerage:
+        example: Goldman Sachs
+        type: string
+      company:
+        example: Apple Inc.
+        type: string
+      current_rating:
+        example: Buy
+        type: string
+      price_change:
+        example: 15.5
+        type: number
+      rating_improvement:
+        example: true
+        type: boolean
+      reason:
+        example: Target raised by 15%, upgraded to Buy rating
+        type: string
+      recommendation:
+        example: Strong Buy
+        type: string
+      score:
+        example: 8.5
+        type: number
+      target_price:
+        example: $180.00
+        type: string
+      ticker:
+        example: AAPL
+        type: string
+    type: object
+  handlers.SummaryResponse:
+    properties:
+      generated_at:
+        example: "2024-01-15T10:30:00Z"
+        type: string
+      summary:
+        example: Today's market shows strong bullish sentiment with 15 stocks receiving
+          target price increases. Apple leads recommendations with a 12% target raise
+          to $180, while tech sector dominates with 60% of top picks.
+        type: string
+      tokens_used:
+        example: 245
+        type: integer
+    type: object
+  models.ActiveStock:
+    properties:
+      company:
+        example: Apple Inc.
+        type: string
+      rating_count:
+        example: 25
+        type: integer
+      ticker:
+        example: AAPL
+        type: string
+    type: object
+  models.ApiResponse:
+    properties:
+      items:
+        items:
+          $ref: '#/definitions/models.StockRatings'
+        type: array
+      next_page:
+        type: string
+    type: object
+  models.BrokerageActivity:
+    properties:
+      activity:
+        example: 150
+        type: integer
+      name:
+        example: Goldman Sachs
+        type: string
+    type: object
+  models.BulkPageRequest:
+    properties:
+      end_page:
+        example: 100
+        type: integer
+      start_page:
+        example: 1
+        type: integer
+    required:
+    - end_page
+    - start_page
+    type: object
+  models.BulkResponse:
+    properties:
+      message:
+        example: Successfully fetched and stored stock data
+        type: string
+      pages_fetched:
+        example: 1-1000
+        type: string
+      stocks:
+        items:
+          $ref: '#/definitions/models.StockRatings'
+        type: array
+      total_stocks:
+        example: 7860
+        type: integer
+    type: object
+  models.ErrorResponse:
+    properties:
+      error:
+        example: Invalid JSON format in request body
+        type: string
+    type: object
+  models.GenericErrorResponse:
+    properties:
+      error:
+        example: Internal server error occurred
+        type: string
+    type: object
+  models.MarketSentiment:
+    properties:
+      bearish_count:
+        example: 600
+        type: integer
+      bearish_percentage:
+        example: 23.8
+        type: number
+      bullish_count:
+        example: 1400
+        type: integer
+      bullish_percentage:
+        example: 55.6
+        type: number
+      neutral_count:
+        example: 520
+        type: integer
+      neutral_percentage:
+        example: 20.6
+        type: number
+    type: object
+  models.MetricsData:
+    properties:
+      description:
+        example: Comprehensive stock market analytics based on analyst ratings and
+          target price changes
+        type: string
+      generated_at:
+        example: "2025-01-15T10:30:00Z"
+        type: string
+      market_sentiment:
+        $ref: '#/definitions/models.MarketSentiment'
+      most_active_stocks:
+        items:
+          $ref: '#/definitions/models.ActiveStock'
+        type: array
+      rating_distribution:
+        additionalProperties:
+          type: integer
+        type: object
+      recent_activity:
+        example: 125
+        type: integer
+      target_changes:
+        $ref: '#/definitions/models.TargetChanges'
+      top_brokerages:
+        items:
+          $ref: '#/definitions/models.BrokerageActivity'
+        type: array
+      total_records:
+        example: 2520
+        type: integer
+    type: object
+  models.MetricsResponse:
+    properties:
+      metrics:
+        $ref: '#/definitions/models.MetricsData'
+      success:
+        example: true
+        type: boolean
+    type: object
+  models.PageRequest:
+    properties:
+      page:
+        example: 1
+        type: integer
+    required:
+    - page
+    type: object
+  models.PaginatedResponse:
+    properties:
+      data:
+        items:
+          $ref: '#/definitions/models.StockRatings'
+        type: array
+      pagination:
+        $ref: '#/definitions/models.PaginationMeta'
+    type: object
+  models.PaginationMeta:
+    properties:
+      has_next:
+        example: true
+        type: boolean
+      has_previous:
+        example: false
+        type: boolean
+      page_length:
+        example: 20
+        type: integer
+      page_number:
+        example: 1
+        type: integer
+      total_pages:
+        example: 126
+        type: integer
+      total_records:
+        example: 2520
+        type: integer
+    type: object
+  models.PaginationRequest:
+    properties:
+      page_length:
+        example: 20
+        type: integer
+      page_number:
+        example: 1
+        type: integer
+    required:
+    - page_length
+    - page_number
+    type: object
+  models.StockRatings:
+    properties:
+      action:
+        example: target raised by
+        type: string
+      brokerage:
+        example: Goldman Sachs
+        type: string
+      company:
+        example: Apple Inc.
+        type: string
+      created_at:
+        example: "2025-01-15T10:35:00Z"
+        type: string
+      id:
+        example: 1
+        type: integer
+      rating_from:
+        example: Buy
+        type: string
+      rating_to:
+        example: Strong Buy
+        type: string
+      target_from:
+        example: $150.00
+        type: string
+      target_to:
+        example: $180.00
+        type: string
+      ticker:
+        example: AAPL
+        type: string
+      time:
+        example: "2025-01-15T10:30:00Z"
+        type: string
+    type: object
+  models.TargetChanges:
+    properties:
+      lowered:
+        example: 800
+        type: integer
+      maintained:
+        example: 520
+        type: integer
+      raised:
+        example: 1200
+        type: integer
+    type: object
+host: localhost:8081
+info:
+  contact: {}
+  description: API for fetching and managing stock ratings data
+  title: Smart Stock Recommender API
+  version: "1.0"
+paths:
+  /stocks:
+    post:
+      consumes:
+      - application/json
+      description: Retrieves stock data from external API for a specific page and
+        stores in database. Returns the raw API response with stock items and next
+        page token.
+      parameters:
+      - description: Request body with page number (integer, required)
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/models.PageRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Successfully fetched stock data from external API
+          schema:
+            $ref: '#/definitions/models.ApiResponse'
+        "400":
+          description: Bad request - invalid JSON format, missing page field, or invalid
+            page number
+          schema:
+            $ref: '#/definitions/models.ErrorResponse'
+        "500":
+          description: Internal server error occurred
+          schema:
+            $ref: '#/definitions/models.GenericErrorResponse'
+      summary: Fetch stocks by page number
+      tags:
+      - stocks
+  /stocks/actions:
+    get:
+      description: Retrieves a list of all unique action types found in the stock
+        ratings database, sorted alphabetically. Used for populating filter dropdowns
+        and ensuring UI reflects actual data.
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Successfully retrieved list of unique actions
+          schema:
+            $ref: '#/definitions/handlers.ActionsResponse'
+        "500":
+          description: Internal server error occurred
+          schema:
+            $ref: '#/definitions/models.GenericErrorResponse'
+      summary: Get all available stock actions
+      tags:
+      - stocks
+  /stocks/bulk:
+    post:
+      consumes:
+      - application/json
+      description: Clears existing database data, then fetches stock data from external
+        API for a range of pages using parallel processing. Returns summary statistics
+        of the operation.
+      parameters:
+      - description: Request body with start_page and end_page (integers, both required,
+          max range 1,000,000)
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/models.BulkPageRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Successfully processed bulk stock data fetch with parallel
+            processing
+          schema:
+            $ref: '#/definitions/models.BulkResponse'
+        "400":
+          description: Bad request - invalid JSON, negative pages, start > end, or
+            range too large
+          schema:
+            $ref: '#/definitions/models.ErrorResponse'
+        "500":
+          description: Internal server error occurred
+          schema:
+            $ref: '#/definitions/models.GenericErrorResponse'
+      summary: Fetch stocks in bulk for page range with parallel processing
+      tags:
+      - stocks
+  /stocks/chat:
+    post:
+      consumes:
+      - application/json
+      description: Interactive chat with gpt-4.1-nano that can query the database
+        for specific stock information and provide personalized analysis based on
+        actual data.
+      parameters:
+      - description: Chat message from user
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/handlers.ChatRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Successfully generated AI chat response with database context
+          schema:
+            $ref: '#/definitions/handlers.ChatResponse'
+        "400":
+          description: Bad request - missing message
+          schema:
+            $ref: '#/definitions/models.ErrorResponse'
+        "500":
+          description: Internal server error or OpenAI API error
+          schema:
+            $ref: '#/definitions/models.GenericErrorResponse'
+      summary: Chat with AI about stock market with database context
+      tags:
+      - ai-analysis
+  /stocks/filter-options:
+    get:
+      description: Retrieves filter options including actions, ratings from database
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Successfully retrieved filter options
+          schema:
+            $ref: '#/definitions/handlers.FilterOptionsResponse'
+        "500":
+          description: Internal server error occurred
+          schema:
+            $ref: '#/definitions/models.GenericErrorResponse'
+      summary: Get all available filter options
+      tags:
+      - stocks
+  /stocks/list:
+    post:
+      consumes:
+      - application/json
+      description: Retrieves stored stock ratings with pagination support, ordered
+        by creation date (newest first). Returns both data and pagination metadata.
+      parameters:
+      - description: Request body with page_number (integer, min 1) and page_length
+          (integer, 1-1000)
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/models.PaginationRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Successfully retrieved paginated stock ratings with metadata
+          schema:
+            $ref: '#/definitions/models.PaginatedResponse'
+        "400":
+          description: Bad request - invalid JSON, page_number <= 0, or page_length
+            not between 1-1000
+          schema:
+            $ref: '#/definitions/models.ErrorResponse'
+        "500":
+          description: Internal server error occurred
+          schema:
+            $ref: '#/definitions/models.GenericErrorResponse'
+      summary: Get paginated stock ratings from database
+      tags:
+      - stocks
+  /stocks/metrics:
+    get:
+      description: Analyzes all stored stock ratings using parallel processing to
+        provide comprehensive market insights including sentiment analysis, target
+        price changes, rating distributions, top brokerages, most active stocks, and
+        recent activity trends.
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Successfully calculated comprehensive market metrics and analytics
+          schema:
+            $ref: '#/definitions/models.MetricsResponse'
+        "500":
+          description: Internal server error occurred
+          schema:
+            $ref: '#/definitions/models.GenericErrorResponse'
+      summary: Get comprehensive stock market analytics and metrics
+      tags:
+      - analytics
+  /stocks/recommendations:
+    get:
+      description: Analyzes all stock ratings data using configurable weighted algorithms
+        to provide ranked investment recommendations. Considers target price changes,
+        rating improvements, analyst sentiment, and market trends.
+      parameters:
+      - default: 10
+        description: Number of recommendations to return (3, 5, 10, 15, 20)
+        in: query
+        name: limit
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Successfully generated stock recommendations with scoring and
+            analysis
+          schema:
+            $ref: '#/definitions/handlers.RecommendationsResponse'
+        "400":
+          description: Bad request - invalid limit parameter
+          schema:
+            $ref: '#/definitions/models.ErrorResponse'
+        "500":
+          description: Internal server error occurred during analysis
+          schema:
+            $ref: '#/definitions/models.GenericErrorResponse'
+      summary: Get quantitative stock investment recommendations
+      tags:
+      - recommendations
+  /stocks/search:
+    post:
+      consumes:
+      - application/json
+      description: Searches through stock ratings using filters including search term,
+        action, ratings, and target price ranges.
+      parameters:
+      - description: Search parameters with filters
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/handlers.AdvancedSearchRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Successfully retrieved filtered stock ratings
+          schema:
+            $ref: '#/definitions/models.PaginatedResponse'
+        "400":
+          description: Bad request
+          schema:
+            $ref: '#/definitions/models.ErrorResponse'
+        "500":
+          description: Internal server error
+          schema:
+            $ref: '#/definitions/models.GenericErrorResponse'
+      summary: Search stock ratings with filters
+      tags:
+      - stocks
+  /stocks/summary:
+    get:
+      description: Uses gpt-4.1-nano to analyze current stock recommendations and
+        generate a comprehensive natural language summary of market trends, top picks,
+        and investment insights.
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Successfully generated AI market summary
+          schema:
+            $ref: '#/definitions/handlers.SummaryResponse'
+        "500":
+          description: Internal server error or OpenAI API error
+          schema:
+            $ref: '#/definitions/models.GenericErrorResponse'
+      summary: Get AI-generated market summary
+      tags:
+      - ai-analysis
+swagger: "2.0"

@@ -6,6 +6,9 @@ yarn-debug.log*
 yarn-error.log*
 pnpm-debug.log*
 lerna-debug.log*
+*.env
+test.txt
+shortcuts.txt
 
 node_modules
 dist
@@ -22,3 +25,6 @@ dist-ssr
 *.njsproj
 *.sln
 *.sw?
+*.exe
+*.exe~
+*.dll
