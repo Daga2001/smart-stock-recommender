@@ -9,9 +9,13 @@ import (
 	"database/sql"
 	"encoding/json"
 	"fmt"
+	"math"
 	"net/http"
 	"os"
 	"smart-stock-recommender/models"
+	"sort"
+	"strconv"
+	"strings"
 	"sync"
 	"time"
 
@@ -244,11 +248,11 @@ Expected Body format:
 func (h *StockHandler) fetchStocksBulkParallel(startPage, endPage int) ([]models.StockRatings, int, error) {
 	const BATCH_SIZE = 1000 // Configurable batch size
 	const MAX_CONCURRENT = 30
-	
+
 	pageCount := endPage - startPage + 1
 	println("🚀 Starting bulk fetch for", pageCount, "pages (from", startPage, "to", endPage, ")")
 	println("📊 Configuration: Batch size =", BATCH_SIZE, ", Max concurrent =", MAX_CONCURRENT)
-	
+
 	type result struct {
 		stocks []models.StockRatings
 		page   int
@@ -288,7 +292,7 @@ func (h *StockHandler) fetchStocksBulkParallel(startPage, endPage int) ([]models
 
 	for res := range results {
 		processedPages++
-		
+
 		if res.err != nil {
 			println("❌ Error on page", res.page, ":", res.err.Error())
 			return nil, 0, fmt.Errorf("failed to fetch page %d: %v", res.page, res.err)
@@ -304,11 +308,11 @@ func (h *StockHandler) fetchStocksBulkParallel(startPage, endPage int) ([]models
 			if len(stockBuffer) >= BATCH_SIZE {
 				batchCount++
 				println("💾 BATCH", batchCount, ": Processing", len(stockBuffer), "stocks...")
-				
+
 				if err := h.batchInsertStocksWithLogging(stockBuffer, batchCount); err != nil {
 					return nil, 0, fmt.Errorf("failed to insert batch %d: %v", batchCount, err)
 				}
-				
+
 				stockBuffer = stockBuffer[:0] // Clear buffer
 			}
 		}
@@ -332,7 +336,7 @@ func (h *StockHandler) fetchStocksBulkParallel(startPage, endPage int) ([]models
 	// Get actual database count for verification
 	var actualCount int
 	h.DB.QueryRow("SELECT COUNT(*) FROM stock_ratings").Scan(&actualCount)
-	
+
 	println("🎉 SUMMARY: Processed", processedPages, "pages, found data in", pagesWithData, "pages")
 	println("📊 Total stocks fetched:", totalFetched, "| Total batches processed:", batchCount)
 	println("💾 Database verification: Actual records in DB =", actualCount)
@@ -380,7 +384,7 @@ func (h *StockHandler) batchInsertStocksWithLogging(stocks []models.StockRatings
 			println("❌ BATCH", batchNum, ": Insert failed for", stock.Ticker, ":", err.Error())
 			return err
 		}
-		
+
 		// Check if row was actually inserted (not a duplicate)
 		rowsAffected, _ := result.RowsAffected()
 		if rowsAffected > 0 {
@@ -388,7 +392,7 @@ func (h *StockHandler) batchInsertStocksWithLogging(stocks []models.StockRatings
 		} else {
 			skippedCount++
 		}
-		
+
 		// Show progress every 200 attempts
 		if (i+1)%200 == 0 {
 			println("📈 BATCH", batchNum, ":", i+1, "/", len(stocks), "processed (", insertedCount, "new,", skippedCount, "duplicates)")
@@ -552,7 +556,7 @@ func (h *StockHandler) SearchStockRatings(c *gin.Context) {
 		   OR LOWER(action) LIKE LOWER($1) OR LOWER(rating_from) LIKE LOWER($1) OR LOWER(rating_to) LIKE LOWER($1)`
 	searchPattern := "%" + req.SearchTerm + "%"
 	println("🔍 Searching for:", req.SearchTerm, "| Pattern:", searchPattern)
-	
+
 	var totalCount int
 	err := h.DB.QueryRow(countQuery, searchPattern).Scan(&totalCount)
 	if err != nil {
@@ -657,6 +661,566 @@ func (h *StockHandler) GetStockActions(c *gin.Context) {
 	})
 }
 
+// stockData represents internal stock data structure for analysis
+type stockData struct {
+	Ticker     string
+	Company    string
+	Action     string
+	Brokerage  string
+	RatingFrom string
+	RatingTo   string
+	TargetFrom string
+	TargetTo   string
+	Time       string
+	CreatedAt  time.Time
+}
+
+// StockRecommendation represents a stock recommendation
+type StockRecommendation struct {
+	Ticker            string  `json:"ticker" example:"AAPL"`
+	Company           string  `json:"company" example:"Apple Inc."`
+	CurrentRating     string  `json:"current_rating" example:"Buy"`
+	TargetPrice       string  `json:"target_price" example:"$180.00"`
+	Score             float64 `json:"score" example:"8.5"`
+	Recommendation    string  `json:"recommendation" example:"Strong Buy"`
+	Reason            string  `json:"reason" example:"Target raised by 15%, upgraded to Buy rating"`
+	Brokerage         string  `json:"brokerage" example:"Goldman Sachs"`
+	PriceChange       float64 `json:"price_change" example:"15.5"`
+	RatingImprovement bool    `json:"rating_improvement" example:"true"`
+}
+
+type RecommendationsResponse struct {
+	Recommendations []StockRecommendation `json:"recommendations"`
+	GeneratedAt     string                `json:"generated_at" example:"2024-01-15T10:30:00Z"`
+	TotalAnalyzed   int                   `json:"total_analyzed" example:"1250"`
+}
+
+// GetStockRecommendations analyzes stock data and provides investment recommendations
+// @Summary Get AI-powered stock investment recommendations
+// @Description Analyzes all stock ratings data using advanced algorithms to provide ranked investment recommendations. Considers target price changes, rating improvements, analyst sentiment, and market trends to identify the best investment opportunities.
+// @Tags recommendations
+// @Produce json
+// @Success 200 {object} RecommendationsResponse "Successfully generated stock recommendations with scoring and analysis"
+// @Failure 500 {object} models.GenericErrorResponse "Internal server error occurred during analysis"
+// @Router /stocks/recommendations [get]
+func (h *StockHandler) GetStockRecommendations(c *gin.Context) {
+	// Query to get all stock data for analysis
+	query := `
+		SELECT ticker, company, action, brokerage, rating_from, rating_to, 
+		       target_from, target_to, time, created_at
+		FROM stock_ratings 
+		WHERE ticker IS NOT NULL AND company IS NOT NULL
+		ORDER BY created_at DESC`
+
+	rows, err := h.DB.Query(query)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to query stock data for recommendations"})
+		return
+	}
+	defer rows.Close()
+
+	// Collect stock data
+	var stocks []stockData
+	for rows.Next() {
+		var stock stockData
+		err := rows.Scan(&stock.Ticker, &stock.Company, &stock.Action, &stock.Brokerage,
+			&stock.RatingFrom, &stock.RatingTo, &stock.TargetFrom, &stock.TargetTo,
+			&stock.Time, &stock.CreatedAt)
+		if err != nil {
+			continue
+		}
+		stocks = append(stocks, stock)
+	}
+
+	// Analyze and generate recommendations
+	recommendations := analyzeStocksForRecommendations(stocks)
+
+	// Return top recommendations
+	c.JSON(http.StatusOK, RecommendationsResponse{
+		Recommendations: recommendations,
+		GeneratedAt:     time.Now().Format(time.RFC3339),
+		TotalAnalyzed:   len(stocks),
+	})
+}
+
+// analyzeStocksForRecommendations implements the recommendation algorithm
+func analyzeStocksForRecommendations(stocks []stockData) []StockRecommendation {
+	// Group stocks by ticker to analyze latest data
+	stockMap := make(map[string][]stockData)
+	for _, stock := range stocks {
+		stockMap[stock.Ticker] = append(stockMap[stock.Ticker], stock)
+	}
+
+	var recommendations []StockRecommendation
+
+	// for each ticker, analyze the most recent entry
+	for ticker, stockList := range stockMap {
+		if len(stockList) == 0 {
+			continue
+		}
+
+		// Get the most recent entry for this stock
+		latestStock := stockList[0]
+		for _, s := range stockList {
+			if s.CreatedAt.After(latestStock.CreatedAt) {
+				latestStock = s
+			}
+		}
+
+		// Calculate recommendation score
+		score := calculateStockScore(latestStock, stockList)
+		if score < 5.0 { // Only recommend stocks with score >= 5.0
+			continue
+		}
+
+		// Parse target prices for analysis
+		targetFrom := parsePrice(latestStock.TargetFrom)
+		targetTo := parsePrice(latestStock.TargetTo)
+		priceChange := 0.0
+		if targetFrom > 0 {
+			priceChange = ((targetTo - targetFrom) / targetFrom) * 100
+		}
+
+		// Determine recommendation level
+		recommendationLevel := getRecommendationLevel(score)
+		reason := generateRecommendationReason(latestStock, priceChange, score)
+
+		recommendations = append(recommendations, StockRecommendation{
+			Ticker:            ticker,
+			Company:           latestStock.Company,
+			CurrentRating:     latestStock.RatingTo,
+			TargetPrice:       latestStock.TargetTo,
+			Score:             score,
+			Recommendation:    recommendationLevel,
+			Reason:            reason,
+			Brokerage:         latestStock.Brokerage,
+			PriceChange:       priceChange,
+			RatingImprovement: isRatingImprovement(latestStock.RatingFrom, latestStock.RatingTo),
+		})
+	}
+
+	// Sort by score (highest first) and return top 10
+	sort.Slice(recommendations, func(i, j int) bool {
+		return recommendations[i].Score > recommendations[j].Score
+	})
+
+	// Limit to top 10 recommendations
+	if len(recommendations) > 10 {
+		recommendations = recommendations[:10]
+	}
+
+	return recommendations
+}
+
+// calculateStockScore implements the scoring algorithm
+func calculateStockScore(stock stockData, history []stockData) float64 {
+	score := 5.0 // Base score
+
+	// Target price analysis (40% weight)
+	targetFrom := parsePrice(stock.TargetFrom)
+	targetTo := parsePrice(stock.TargetTo)
+	if targetFrom > 0 && targetTo > targetFrom {
+		priceIncrease := ((targetTo - targetFrom) / targetFrom) * 100
+		if priceIncrease > 20 {
+			score += 3.0 // Significant price increase
+		} else if priceIncrease > 10 {
+			score += 2.0 // Moderate price increase
+		} else if priceIncrease > 5 {
+			score += 1.0 // Small price increase
+		}
+	} else if targetTo < targetFrom {
+		score -= 2.0 // Price target lowered
+	}
+
+	// Rating analysis (30% weight)
+	if isRatingImprovement(stock.RatingFrom, stock.RatingTo) {
+		score += 2.0 // Rating upgraded
+	}
+	if isStrongBuyRating(stock.RatingTo) {
+		score += 1.5 // Strong buy rating
+	} else if isBuyRating(stock.RatingTo) {
+		score += 1.0 // Buy rating
+	}
+
+	// Action analysis (20% weight)
+	action := strings.ToLower(stock.Action)
+	if strings.Contains(action, "raised") || strings.Contains(action, "upgrade") {
+		score += 1.5 // Positive action
+	} else if strings.Contains(action, "initiated") && isBuyRating(stock.RatingTo) {
+		score += 1.0 // New buy coverage
+	} else if strings.Contains(action, "lowered") || strings.Contains(action, "downgrade") {
+		score -= 1.5 // Negative action
+	}
+
+	// Recent activity bonus (10% weight)
+	if time.Since(stock.CreatedAt).Hours() < 24 {
+		score += 0.5 // Recent activity
+	}
+
+	// Multiple analyst coverage bonus
+	if len(history) > 2 {
+		score += 0.5 // Multiple analysts covering
+	}
+
+	return math.Min(10.0, math.Max(0.0, score)) // Cap between 0-10
+}
+
+// Helper functions
+func parsePrice(priceStr string) float64 {
+	cleanPrice := strings.ReplaceAll(priceStr, "$", "")
+	cleanPrice = strings.ReplaceAll(cleanPrice, ",", "")
+	price, _ := strconv.ParseFloat(cleanPrice, 64)
+	return price
+}
+
+func isRatingImprovement(from, to string) bool {
+	ratingScore := map[string]int{
+		"strong sell": 1, "sell": 2, "underperform": 3, "hold": 4, "neutral": 5,
+		"outperform": 6, "buy": 7, "strong buy": 8, "overweight": 7, "underweight": 3,
+	}
+	return ratingScore[strings.ToLower(to)] > ratingScore[strings.ToLower(from)]
+}
+
+func isStrongBuyRating(rating string) bool {
+	lower := strings.ToLower(rating)
+	return strings.Contains(lower, "strong buy") || strings.Contains(lower, "overweight")
+}
+
+func isBuyRating(rating string) bool {
+	lower := strings.ToLower(rating)
+	return strings.Contains(lower, "buy") || strings.Contains(lower, "outperform")
+}
+
+func getRecommendationLevel(score float64) string {
+	if score >= 8.5 {
+		return "Strong Buy"
+	} else if score >= 7.0 {
+		return "Buy"
+	} else if score >= 6.0 {
+		return "Moderate Buy"
+	} else {
+		return "Hold"
+	}
+}
+
+func generateRecommendationReason(stock stockData, priceChange, score float64) string {
+	reasons := []string{}
+
+	if priceChange > 10 {
+		reasons = append(reasons, fmt.Sprintf("Target raised by %.1f%%", priceChange))
+	}
+	if isRatingImprovement(stock.RatingFrom, stock.RatingTo) {
+		reasons = append(reasons, fmt.Sprintf("Upgraded to %s", stock.RatingTo))
+	}
+	if strings.Contains(strings.ToLower(stock.Action), "initiated") {
+		reasons = append(reasons, "New analyst coverage")
+	}
+	if score >= 8.0 {
+		reasons = append(reasons, "Strong analyst sentiment")
+	}
+
+	if len(reasons) == 0 {
+		return "Positive analyst outlook"
+	}
+	return strings.Join(reasons, ", ")
+}
+
+// SummaryResponse represents an AI-generated market summary
+type SummaryResponse struct {
+	Summary     string `json:"summary" example:"Today's market shows strong bullish sentiment with 15 stocks receiving target price increases. Apple leads recommendations with a 12% target raise to $180, while tech sector dominates with 60% of top picks."`
+	GeneratedAt string `json:"generated_at" example:"2024-01-15T10:30:00Z"`
+	TokensUsed  int    `json:"tokens_used" example:"245"`
+}
+
+// GetStockSummary generates AI-powered natural language summary of stock recommendations
+// @Summary Get AI-generated market summary
+// @Description Uses gpt-4.1-nano to analyze current stock recommendations and generate a comprehensive natural language summary of market trends, top picks, and investment insights.
+// @Tags ai-analysis
+// @Produce json
+// @Success 200 {object} SummaryResponse "Successfully generated AI market summary"
+// @Failure 500 {object} models.GenericErrorResponse "Internal server error or OpenAI API error"
+// @Router /stocks/summary [get]
+func (h *StockHandler) GetStockSummary(c *gin.Context) {
+	// Get current recommendations
+	recommendations := h.getRecommendationsForSummary()
+	if len(recommendations) == 0 {
+		c.JSON(http.StatusOK, SummaryResponse{
+			Summary:     "No stock recommendations available at this time. Please ensure the database contains stock ratings data.",
+			GeneratedAt: time.Now().Format(time.RFC3339),
+			TokensUsed:  0,
+		})
+		return
+	}
+
+	// Generate AI summary
+	summary, tokensUsed, err := h.generateAISummary(recommendations)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": fmt.Sprintf("Failed to generate AI summary: %v", err)})
+		return
+	}
+
+	c.JSON(http.StatusOK, SummaryResponse{
+		Summary:     summary,
+		GeneratedAt: time.Now().Format(time.RFC3339),
+		TokensUsed:  tokensUsed,
+	})
+}
+
+// getRecommendationsForSummary gets top recommendations for AI analysis
+func (h *StockHandler) getRecommendationsForSummary() []StockRecommendation {
+	query := `
+		SELECT ticker, company, action, brokerage, rating_from, rating_to, 
+		       target_from, target_to, time, created_at
+		FROM stock_ratings 
+		WHERE ticker IS NOT NULL AND company IS NOT NULL
+		ORDER BY created_at DESC
+		LIMIT 50`
+
+	rows, err := h.DB.Query(query)
+	if err != nil {
+		return []StockRecommendation{}
+	}
+	defer rows.Close()
+
+	var stocks []stockData
+	for rows.Next() {
+		var stock stockData
+		err := rows.Scan(&stock.Ticker, &stock.Company, &stock.Action, &stock.Brokerage,
+			&stock.RatingFrom, &stock.RatingTo, &stock.TargetFrom, &stock.TargetTo,
+			&stock.Time, &stock.CreatedAt)
+		if err != nil {
+			continue
+		}
+		stocks = append(stocks, stock)
+	}
+
+	return analyzeStocksForRecommendations(stocks)
+}
+
+// generateAISummary calls OpenAI gpt-4.1-nano to generate market summary
+func (h *StockHandler) generateAISummary(recommendations []StockRecommendation) (string, int, error) {
+	// Prepare data for AI analysis
+	prompt := h.buildSummaryPrompt(recommendations)
+
+	// OpenAI API request
+	reqBody := map[string]interface{}{
+		"model": "gpt-4.1-nano",
+		"messages": []map[string]string{
+			{
+				"role":    "system",
+				"content": "You are a professional financial analyst. Provide concise, actionable market summaries based on stock recommendation data. Focus on trends, top picks, and key insights. Keep responses under 200 words.",
+			},
+			{
+				"role":    "user",
+				"content": prompt,
+			},
+		},
+		"max_tokens":  250,
+		"temperature": 0.7,
+	}
+
+	reqJSON, _ := json.Marshal(reqBody)
+
+	// Make API request
+	req, err := http.NewRequest("POST", "https://api.openai.com/v1/chat/completions", strings.NewReader(string(reqJSON)))
+	if err != nil {
+		return "", 0, err
+	}
+
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("Authorization", "Bearer "+os.Getenv("OPENAI_API_KEY"))
+
+	client := &http.Client{Timeout: 30 * time.Second}
+	resp, err := client.Do(req)
+	if err != nil {
+		return "", 0, err
+	}
+	defer resp.Body.Close()
+
+	// Parse response
+	var openAIResp struct {
+		Choices []struct {
+			Message struct {
+				Content string `json:"content"`
+			} `json:"message"`
+		} `json:"choices"`
+		Usage struct {
+			TotalTokens int `json:"total_tokens"`
+		} `json:"usage"`
+		Error struct {
+			Message string `json:"message"`
+		} `json:"error"`
+	}
+
+	if err := json.NewDecoder(resp.Body).Decode(&openAIResp); err != nil {
+		return "", 0, err
+	}
+
+	if openAIResp.Error.Message != "" {
+		return "", 0, fmt.Errorf("OpenAI API error: %s", openAIResp.Error.Message)
+	}
+
+	if len(openAIResp.Choices) == 0 {
+		return "", 0, fmt.Errorf("no response from OpenAI")
+	}
+
+	return openAIResp.Choices[0].Message.Content, openAIResp.Usage.TotalTokens, nil
+}
+
+// buildSummaryPrompt creates the prompt for AI analysis
+func (h *StockHandler) buildSummaryPrompt(recommendations []StockRecommendation) string {
+	if len(recommendations) == 0 {
+		return "No stock recommendations available."
+	}
+
+	prompt := "Analyze these stock recommendations and provide a market summary:\n\n"
+
+	for i, rec := range recommendations {
+		if i >= 10 { // Limit to top 10 for prompt size
+			break
+		}
+		prompt += fmt.Sprintf("%d. %s (%s) - %s by %s\n   Rating: %s, Target: %s, Score: %.1f\n   Reason: %s\n\n",
+			i+1, rec.Company, rec.Ticker, rec.Recommendation, rec.Brokerage,
+			rec.CurrentRating, rec.TargetPrice, rec.Score, rec.Reason)
+	}
+
+	prompt += "Provide insights on: market sentiment, top sectors, key trends, and investment outlook."
+	return prompt
+}
+
+// ChatResponse represents an AI chat response
+type ChatResponse struct {
+	Response    string `json:"response" example:"Based on current market data, I recommend focusing on stocks with strong buy ratings and recent target price increases. The biotech sector shows particular promise."`
+	TokensUsed  int    `json:"tokens_used" example:"156"`
+	GeneratedAt string `json:"generated_at" example:"2024-01-15T10:30:00Z"`
+}
+
+type ChatRequest struct {
+	Message string `json:"message" example:"What are the best stocks to invest in today?"`
+}
+
+// GetStockChat provides AI-powered chat responses about stock market
+// @Summary Chat with AI about stock market
+// @Description Interactive chat with GPT-3.5-turbo for personalized stock analysis, market insights, and investment advice based on current data.
+// @Tags ai-analysis
+// @Accept json
+// @Produce json
+// @Param request body ChatRequest true "Chat message from user"
+// @Success 200 {object} ChatResponse "Successfully generated AI chat response"
+// @Failure 400 {object} models.ErrorResponse "Bad request - missing message"
+// @Failure 500 {object} models.GenericErrorResponse "Internal server error or OpenAI API error"
+// @Router /stocks/chat [post]
+func (h *StockHandler) GetStockChat(c *gin.Context) {
+	var req ChatRequest
+
+	if err := json.NewDecoder(c.Request.Body).Decode(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid JSON format"})
+		return
+	}
+
+	if req.Message == "" {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Message is required"})
+		return
+	}
+
+	// Get context from recent recommendations
+	recommendations := h.getRecommendationsForSummary()
+	context := h.buildChatContext(recommendations)
+
+	// Generate AI response
+	response, tokensUsed, err := h.generateChatResponse(req.Message, context)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": fmt.Sprintf("Failed to generate response: %v", err)})
+		return
+	}
+
+	c.JSON(http.StatusOK, ChatResponse{
+		Response:    response,
+		TokensUsed:  tokensUsed,
+		GeneratedAt: time.Now().Format(time.RFC3339),
+	})
+}
+
+// generateChatResponse calls OpenAI for chat responses
+func (h *StockHandler) generateChatResponse(userMessage, context string) (string, int, error) {
+	reqBody := map[string]interface{}{
+		"model": "gpt-3.5-turbo",
+		"messages": []map[string]string{
+			{
+				"role":    "system",
+				"content": "You are a professional financial advisor with access to current stock market data. Provide helpful, accurate investment advice based on the provided market context. Keep responses concise and actionable. Context: " + context,
+			},
+			{
+				"role":    "user",
+				"content": userMessage,
+			},
+		},
+		"max_tokens":   300,
+		"temperature": 0.7,
+	}
+
+	reqJSON, _ := json.Marshal(reqBody)
+
+	req, err := http.NewRequest("POST", "https://api.openai.com/v1/chat/completions", strings.NewReader(string(reqJSON)))
+	if err != nil {
+		return "", 0, err
+	}
+
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("Authorization", "Bearer "+os.Getenv("OPENAI_API_KEY"))
+
+	client := &http.Client{Timeout: 30 * time.Second}
+	resp, err := client.Do(req)
+	if err != nil {
+		return "", 0, err
+	}
+	defer resp.Body.Close()
+
+	var openAIResp struct {
+		Choices []struct {
+			Message struct {
+				Content string `json:"content"`
+			} `json:"message"`
+		} `json:"choices"`
+		Usage struct {
+			TotalTokens int `json:"total_tokens"`
+		} `json:"usage"`
+		Error struct {
+			Message string `json:"message"`
+		} `json:"error"`
+	}
+
+	if err := json.NewDecoder(resp.Body).Decode(&openAIResp); err != nil {
+		return "", 0, err
+	}
+
+	if openAIResp.Error.Message != "" {
+		return "", 0, fmt.Errorf("OpenAI API error: %s", openAIResp.Error.Message)
+	}
+
+	if len(openAIResp.Choices) == 0 {
+		return "", 0, fmt.Errorf("no response from OpenAI")
+	}
+
+	return openAIResp.Choices[0].Message.Content, openAIResp.Usage.TotalTokens, nil
+}
+
+// buildChatContext creates context for chat responses
+func (h *StockHandler) buildChatContext(recommendations []StockRecommendation) string {
+	if len(recommendations) == 0 {
+		return "No current stock recommendations available."
+	}
+
+	context := "Current top stock recommendations: "
+	for i, rec := range recommendations {
+		if i >= 5 { // Limit context size
+			break
+		}
+		context += fmt.Sprintf("%s (%s) - %s, Score: %.1f; ", rec.Company, rec.Ticker, rec.Recommendation, rec.Score)
+	}
+	return context
+}
+
 // GetStockMetrics calculates and returns comprehensive market metrics from stock ratings data
 // @Summary Get comprehensive stock market analytics and metrics
 // @Description Analyzes all stored stock ratings using parallel processing to provide comprehensive market insights including sentiment analysis, target price changes, rating distributions, top brokerages, most active stocks, and recent activity trends.
@@ -695,14 +1259,14 @@ func (h *StockHandler) GetStockMetrics(c *gin.Context) {
 				SUM(CASE WHEN action ILIKE '%lowered%' OR action ILIKE '%decrease%' OR action ILIKE '%downgrade%' THEN 1 ELSE 0 END) as targets_lowered,
 				SUM(CASE WHEN action ILIKE '%maintained%' OR action ILIKE '%reiterated%' THEN 1 ELSE 0 END) as targets_maintained
 			FROM stock_ratings`
-		
+
 		var raised, lowered, maintained int
 		err := h.DB.QueryRow(query).Scan(&raised, &lowered, &maintained)
 		if err != nil {
 			results <- MetricResult{"target_changes", nil, err}
 			return
 		}
-		
+
 		results <- MetricResult{"target_changes", map[string]int{
 			"raised":     raised,
 			"lowered":    lowered,
@@ -721,14 +1285,14 @@ func (h *StockHandler) GetStockMetrics(c *gin.Context) {
 			GROUP BY rating_to 
 			ORDER BY count DESC
 			LIMIT 10`
-		
+
 		rows, err := h.DB.Query(query)
 		if err != nil {
 			results <- MetricResult{"rating_distribution", nil, err}
 			return
 		}
 		defer rows.Close()
-		
+
 		ratings := make(map[string]int)
 		for rows.Next() {
 			var rating string
@@ -738,7 +1302,7 @@ func (h *StockHandler) GetStockMetrics(c *gin.Context) {
 			}
 			ratings[rating] = count
 		}
-		
+
 		results <- MetricResult{"rating_distribution", ratings, nil}
 	}()
 
@@ -753,14 +1317,14 @@ func (h *StockHandler) GetStockMetrics(c *gin.Context) {
 			GROUP BY brokerage 
 			ORDER BY activity_count DESC
 			LIMIT 10`
-		
+
 		rows, err := h.DB.Query(query)
 		if err != nil {
 			results <- MetricResult{"top_brokerages", nil, err}
 			return
 		}
 		defer rows.Close()
-		
+
 		brokerages := make([]map[string]interface{}, 0)
 		for rows.Next() {
 			var brokerage string
@@ -773,7 +1337,7 @@ func (h *StockHandler) GetStockMetrics(c *gin.Context) {
 				"activity": count,
 			})
 		}
-		
+
 		results <- MetricResult{"top_brokerages", brokerages, nil}
 	}()
 
@@ -788,14 +1352,14 @@ func (h *StockHandler) GetStockMetrics(c *gin.Context) {
 			GROUP BY ticker, company 
 			ORDER BY rating_count DESC
 			LIMIT 15`
-		
+
 		rows, err := h.DB.Query(query)
 		if err != nil {
 			results <- MetricResult{"most_active_stocks", nil, err}
 			return
 		}
 		defer rows.Close()
-		
+
 		stocks := make([]map[string]interface{}, 0)
 		for rows.Next() {
 			var ticker, company string
@@ -809,7 +1373,7 @@ func (h *StockHandler) GetStockMetrics(c *gin.Context) {
 				"rating_count": count,
 			})
 		}
-		
+
 		results <- MetricResult{"most_active_stocks", stocks, nil}
 	}()
 
@@ -824,14 +1388,14 @@ func (h *StockHandler) GetStockMetrics(c *gin.Context) {
 				SUM(CASE WHEN rating_to ILIKE '%hold%' OR rating_to ILIKE '%neutral%' THEN 1 ELSE 0 END) as neutral_ratings
 			FROM stock_ratings 
 			WHERE rating_to IS NOT NULL AND rating_to != ''`
-		
+
 		var bullish, bearish, neutral int
 		err := h.DB.QueryRow(query).Scan(&bullish, &bearish, &neutral)
 		if err != nil {
 			results <- MetricResult{"market_sentiment", nil, err}
 			return
 		}
-		
+
 		total := bullish + bearish + neutral
 		sentiment := map[string]interface{}{
 			"bullish_count":      bullish,
@@ -841,7 +1405,7 @@ func (h *StockHandler) GetStockMetrics(c *gin.Context) {
 			"bearish_percentage": float64(bearish) / float64(total) * 100,
 			"neutral_percentage": float64(neutral) / float64(total) * 100,
 		}
-		
+
 		results <- MetricResult{"market_sentiment", sentiment, nil}
 	}()
 
@@ -853,7 +1417,7 @@ func (h *StockHandler) GetStockMetrics(c *gin.Context) {
 			SELECT COUNT(*) as recent_count
 			FROM stock_ratings 
 			WHERE created_at >= NOW() - INTERVAL '7 days'`
-		
+
 		var recentCount int
 		err := h.DB.QueryRow(query).Scan(&recentCount)
 		results <- MetricResult{"recent_activity", recentCount, err}

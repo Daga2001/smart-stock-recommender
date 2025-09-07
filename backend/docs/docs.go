@@ -133,6 +133,52 @@ const docTemplate = `{
                 }
             }
         },
+        "/stocks/chat": {
+            "post": {
+                "description": "Interactive chat with GPT-3.5-turbo for personalized stock analysis, market insights, and investment advice based on current data.",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "ai-analysis"
+                ],
+                "summary": "Chat with AI about stock market",
+                "parameters": [
+                    {
+                        "description": "Chat message from user",
+                        "name": "request",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/handlers.ChatRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Successfully generated AI chat response",
+                        "schema": {
+                            "$ref": "#/definitions/handlers.ChatResponse"
+                        }
+                    },
+                    "400": {
+                        "description": "Bad request - missing message",
+                        "schema": {
+                            "$ref": "#/definitions/models.ErrorResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal server error or OpenAI API error",
+                        "schema": {
+                            "$ref": "#/definitions/models.GenericErrorResponse"
+                        }
+                    }
+                }
+            }
+        },
         "/stocks/list": {
             "post": {
                 "description": "Retrieves stored stock ratings with pagination support, ordered by creation date (newest first). Returns both data and pagination metadata.",
@@ -205,6 +251,32 @@ const docTemplate = `{
                 }
             }
         },
+        "/stocks/recommendations": {
+            "get": {
+                "description": "Analyzes all stock ratings data using advanced algorithms to provide ranked investment recommendations. Considers target price changes, rating improvements, analyst sentiment, and market trends to identify the best investment opportunities.",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "recommendations"
+                ],
+                "summary": "Get AI-powered stock investment recommendations",
+                "responses": {
+                    "200": {
+                        "description": "Successfully generated stock recommendations with scoring and analysis",
+                        "schema": {
+                            "$ref": "#/definitions/handlers.RecommendationsResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal server error occurred during analysis",
+                        "schema": {
+                            "$ref": "#/definitions/models.GenericErrorResponse"
+                        }
+                    }
+                }
+            }
+        },
         "/stocks/search": {
             "post": {
                 "description": "Searches through stock ratings using a search term that matches ticker, company, brokerage, action, or ratings. Returns paginated results with metadata.",
@@ -250,6 +322,32 @@ const docTemplate = `{
                     }
                 }
             }
+        },
+        "/stocks/summary": {
+            "get": {
+                "description": "Uses gpt-4.1-nano to analyze current stock recommendations and generate a comprehensive natural language summary of market trends, top picks, and investment insights.",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "ai-analysis"
+                ],
+                "summary": "Get AI-generated market summary",
+                "responses": {
+                    "200": {
+                        "description": "Successfully generated AI market summary",
+                        "schema": {
+                            "$ref": "#/definitions/handlers.SummaryResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal server error or OpenAI API error",
+                        "schema": {
+                            "$ref": "#/definitions/models.GenericErrorResponse"
+                        }
+                    }
+                }
+            }
         }
     },
     "definitions": {
@@ -268,6 +366,113 @@ const docTemplate = `{
                         "reiterated by",
                         "upgraded"
                     ]
+                }
+            }
+        },
+        "handlers.ChatRequest": {
+            "type": "object",
+            "properties": {
+                "message": {
+                    "type": "string",
+                    "example": "What are the best stocks to invest in today?"
+                }
+            }
+        },
+        "handlers.ChatResponse": {
+            "type": "object",
+            "properties": {
+                "generated_at": {
+                    "type": "string",
+                    "example": "2024-01-15T10:30:00Z"
+                },
+                "response": {
+                    "type": "string",
+                    "example": "Based on current market data, I recommend focusing on stocks with strong buy ratings and recent target price increases. The biotech sector shows particular promise."
+                },
+                "tokens_used": {
+                    "type": "integer",
+                    "example": 156
+                }
+            }
+        },
+        "handlers.RecommendationsResponse": {
+            "type": "object",
+            "properties": {
+                "generated_at": {
+                    "type": "string",
+                    "example": "2024-01-15T10:30:00Z"
+                },
+                "recommendations": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/handlers.StockRecommendation"
+                    }
+                },
+                "total_analyzed": {
+                    "type": "integer",
+                    "example": 1250
+                }
+            }
+        },
+        "handlers.StockRecommendation": {
+            "type": "object",
+            "properties": {
+                "brokerage": {
+                    "type": "string",
+                    "example": "Goldman Sachs"
+                },
+                "company": {
+                    "type": "string",
+                    "example": "Apple Inc."
+                },
+                "current_rating": {
+                    "type": "string",
+                    "example": "Buy"
+                },
+                "price_change": {
+                    "type": "number",
+                    "example": 15.5
+                },
+                "rating_improvement": {
+                    "type": "boolean",
+                    "example": true
+                },
+                "reason": {
+                    "type": "string",
+                    "example": "Target raised by 15%, upgraded to Buy rating"
+                },
+                "recommendation": {
+                    "type": "string",
+                    "example": "Strong Buy"
+                },
+                "score": {
+                    "type": "number",
+                    "example": 8.5
+                },
+                "target_price": {
+                    "type": "string",
+                    "example": "$180.00"
+                },
+                "ticker": {
+                    "type": "string",
+                    "example": "AAPL"
+                }
+            }
+        },
+        "handlers.SummaryResponse": {
+            "type": "object",
+            "properties": {
+                "generated_at": {
+                    "type": "string",
+                    "example": "2024-01-15T10:30:00Z"
+                },
+                "summary": {
+                    "type": "string",
+                    "example": "Today's market shows strong bullish sentiment with 15 stocks receiving target price increases. Apple leads recommendations with a 12% target raise to $180, while tech sector dominates with 60% of top picks."
+                },
+                "tokens_used": {
+                    "type": "integer",
+                    "example": 245
                 }
             }
         },

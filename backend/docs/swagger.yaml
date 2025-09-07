@@ -13,6 +13,86 @@ definitions:
           type: string
         type: array
     type: object
+  handlers.ChatRequest:
+    properties:
+      message:
+        example: What are the best stocks to invest in today?
+        type: string
+    type: object
+  handlers.ChatResponse:
+    properties:
+      generated_at:
+        example: "2024-01-15T10:30:00Z"
+        type: string
+      response:
+        example: Based on current market data, I recommend focusing on stocks with
+          strong buy ratings and recent target price increases. The biotech sector
+          shows particular promise.
+        type: string
+      tokens_used:
+        example: 156
+        type: integer
+    type: object
+  handlers.RecommendationsResponse:
+    properties:
+      generated_at:
+        example: "2024-01-15T10:30:00Z"
+        type: string
+      recommendations:
+        items:
+          $ref: '#/definitions/handlers.StockRecommendation'
+        type: array
+      total_analyzed:
+        example: 1250
+        type: integer
+    type: object
+  handlers.StockRecommendation:
+    properties:
+      brokerage:
+        example: Goldman Sachs
+        type: string
+      company:
+        example: Apple Inc.
+        type: string
+      current_rating:
+        example: Buy
+        type: string
+      price_change:
+        example: 15.5
+        type: number
+      rating_improvement:
+        example: true
+        type: boolean
+      reason:
+        example: Target raised by 15%, upgraded to Buy rating
+        type: string
+      recommendation:
+        example: Strong Buy
+        type: string
+      score:
+        example: 8.5
+        type: number
+      target_price:
+        example: $180.00
+        type: string
+      ticker:
+        example: AAPL
+        type: string
+    type: object
+  handlers.SummaryResponse:
+    properties:
+      generated_at:
+        example: "2024-01-15T10:30:00Z"
+        type: string
+      summary:
+        example: Today's market shows strong bullish sentiment with 15 stocks receiving
+          target price increases. Apple leads recommendations with a 12% target raise
+          to $180, while tech sector dominates with 60% of top picks.
+        type: string
+      tokens_used:
+        example: 245
+        type: integer
+    type: object
   models.ActiveStock:
     properties:
       company:
@@ -352,6 +432,37 @@ paths:
       summary: Fetch stocks in bulk for page range with parallel processing
       tags:
       - stocks
+  /stocks/chat:
+    post:
+      consumes:
+      - application/json
+      description: Interactive chat with GPT-3.5-turbo for personalized stock analysis,
+        market insights, and investment advice based on current data.
+      parameters:
+      - description: Chat message from user
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/handlers.ChatRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Successfully generated AI chat response
+          schema:
+            $ref: '#/definitions/handlers.ChatResponse'
+        "400":
+          description: Bad request - missing message
+          schema:
+            $ref: '#/definitions/models.ErrorResponse'
+        "500":
+          description: Internal server error or OpenAI API error
+          schema:
+            $ref: '#/definitions/models.GenericErrorResponse'
+      summary: Chat with AI about stock market
+      tags:
+      - ai-analysis
   /stocks/list:
     post:
       consumes:
@@ -405,6 +516,27 @@ paths:
       summary: Get comprehensive stock market analytics and metrics
       tags:
       - analytics
+  /stocks/recommendations:
+    get:
+      description: Analyzes all stock ratings data using advanced algorithms to provide
+        ranked investment recommendations. Considers target price changes, rating
+        improvements, analyst sentiment, and market trends to identify the best investment
+        opportunities.
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Successfully generated stock recommendations with scoring and
+            analysis
+          schema:
+            $ref: '#/definitions/handlers.RecommendationsResponse'
+        "500":
+          description: Internal server error occurred during analysis
+          schema:
+            $ref: '#/definitions/models.GenericErrorResponse'
+      summary: Get AI-powered stock investment recommendations
+      tags:
+      - recommendations
   /stocks/search:
     post:
       consumes:
@@ -440,4 +572,23 @@ paths:
       summary: Search stock ratings with pagination
       tags:
       - stocks
+  /stocks/summary:
+    get:
+      description: Uses gpt-4.1-nano to analyze current stock recommendations and
+        generate a comprehensive natural language summary of market trends, top picks,
+        and investment insights.
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Successfully generated AI market summary
+          schema:
+            $ref: '#/definitions/handlers.SummaryResponse'
+        "500":
+          description: Internal server error or OpenAI API error
+          schema:
+            $ref: '#/definitions/models.GenericErrorResponse'
+      summary: Get AI-generated market summary
+      tags:
+      - ai-analysis
 swagger: "2.0"
