@@ -16,8 +16,10 @@ const Index = () => {
     pageNumber,
     pageLength,
     handlePageNumberChange,
+    handlePageInputChange,
     handlePageLengthChange,
     handleRefresh,
+    currentPageNumber,
   } = useStockData();
 
   if (loading) return <div className="flex justify-center items-center h-64">Loading...</div>;
@@ -42,6 +44,8 @@ const Index = () => {
       pageLength={pageLength}
       onPageLengthChange={handlePageLengthChange}
       onRefresh={handleRefresh}
+      onPageInputChange={handlePageInputChange}
+      currentPageNumber={currentPageNumber}
       totalPages={pagination?.total_pages || 1}
       totalRecords={pagination?.total_records || 0}
     />

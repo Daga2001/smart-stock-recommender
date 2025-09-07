@@ -1,4 +1,5 @@
 import { useState, useMemo } from 'react';
+import * as React from 'react';
 import { Stock, StockFilters } from '../types/stock';
 import { StockTable } from './StockTable';
 import { StockFilters as FiltersComponent } from './StockFilters';
@@ -18,6 +19,8 @@ interface StockDashboardProps {
   pageLength?: number;
   onPageLengthChange?: (length: number) => void;
   onRefresh?: (search?: string) => void;
+  onPageInputChange?: (page: number) => void;
+  currentPageNumber?: number;
   totalPages?: number;
   totalRecords?: number;
 }
@@ -37,15 +40,28 @@ export const StockDashboard = ({
   pageLength = 20,
   onPageLengthChange,
   onRefresh,
+  onPageInputChange,
+  currentPageNumber = 1,
   totalPages = 1,
   totalRecords = 0
 }: StockDashboardProps) => {
-  const [filters, setFilters] = useState<StockFilters>({
-    search: '',
-    action: 'all'
-  });
-  
-  const [appliedSearch, setAppliedSearch] = useState<string>('');
+  // Initialize filters from URL params or localStorage
+  const getInitialFilters = (): StockFilters => {
+    if (typeof window !== 'undefined') {
+      const saved = localStorage.getItem('stockFilters');
+      if (saved) {
+        try {
+          return JSON.parse(saved);
+        } catch (e) {
+          // Ignore parsing errors
+        }
+      }
+    }
+    return { search: '', action: 'all' };
+  };
+
+  const [filters, setFilters] = useState<StockFilters>(getInitialFilters);
+  const [appliedSearch, setAppliedSearch] = useState<string>(getInitialFilters().search);
 
   const filteredStocks = useMemo(() => {
     return stocks.filter(stock => {
@@ -57,8 +73,12 @@ export const StockDashboard = ({
   // Handle action filter changes
   const handleActionFilterChange = (newFilters: StockFilters) => {
     setFilters(newFilters);
+    // Save to localStorage
+    localStorage.setItem('stockFilters', JSON.stringify(newFilters));
     // Action filter is applied client-side, no need to refresh data
   };
+
+
 
   // Calculate statistics
   const stats = useMemo(() => {
@@ -236,12 +256,21 @@ export const StockDashboard = ({
             onApplyFilter={() => {
               const searchTerm = filters.search.trim();
               setAppliedSearch(searchTerm);
+              // Save current filters to localStorage
+              localStorage.setItem('stockFilters', JSON.stringify(filters));
               // Immediately trigger the refresh with the search term
               if (searchTerm) {
                 onRefresh?.(searchTerm);
               } else {
                 onRefresh?.('');
               }
+            }}
+            onClearAll={() => {
+              setAppliedSearch('');
+              // Clear localStorage
+              localStorage.removeItem('stockFilters');
+              // Refresh with empty search to show all data
+              onRefresh?.('');
             }}
             loading={loading}
           />
@@ -279,8 +308,8 @@ export const StockDashboard = ({
                     type="number"
                     min="1"
                     max={totalPages}
-                    value={currentPage}
-                    onChange={(e) => onPageChange(Math.max(1, Math.min(totalPages, parseInt(e.target.value) || 1)))}
+                    value={currentPageNumber}
+                    onChange={(e) => onPageInputChange?.(Math.max(1, Math.min(totalPages, parseInt(e.target.value) || 1)))}
                     className="w-20 px-3 py-2 glass-card border border-border/50 rounded-lg text-sm font-mono font-semibold text-center focus:ring-2 focus:ring-primary/50 focus:border-primary transition-all duration-200 hover:shadow-premium"
                   />
                   <span className="text-sm text-muted-foreground font-medium">of {totalPages}</span>
@@ -300,13 +329,18 @@ export const StockDashboard = ({
                   </select>
                 </div>
                 
-                <button
-                  onClick={onRefresh}
-                  disabled={loading}
-                  className="px-4 py-2 glass-card border border-border/50 rounded-lg text-sm font-medium bg-primary/10 hover:bg-primary/20 text-primary focus:ring-2 focus:ring-primary/50 focus:border-primary transition-all duration-200 hover:shadow-premium disabled:opacity-50 disabled:cursor-not-allowed"
-                >
-                  {loading ? 'Loading...' : 'Refresh'}
-                </button>
+                <div className="flex items-center gap-3">
+                  <button
+                    onClick={() => onRefresh?.(appliedSearch)}
+                    disabled={loading}
+                    className="px-4 py-2 glass-card border border-border/50 rounded-lg text-sm font-medium bg-primary/10 hover:bg-primary/20 text-primary focus:ring-2 focus:ring-primary/50 focus:border-primary transition-all duration-200 hover:shadow-premium disabled:opacity-50 disabled:cursor-not-allowed"
+                  >
+                    {loading ? 'Loading...' : 'Refresh'}
+                  </button>
+                  <div className="text-xs text-muted-foreground">
+                    💡 Click refresh after changing page number
+                  </div>
+                </div>
               </div>
               
               <div className="text-sm text-muted-foreground font-medium">

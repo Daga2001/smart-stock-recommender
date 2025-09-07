@@ -15,7 +15,17 @@ export const useStockData = (initialPageNumber = 1, initialPageLength = 20) => {
   const [pagination, setPagination] = useState<PaginationMeta | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [pageNumber, setPageNumber] = useState(initialPageNumber);
+  const getInitialPageNumber = () => {
+    if (typeof window !== 'undefined') {
+      const saved = localStorage.getItem('currentPageNumber');
+      if (saved) {
+        return parseInt(saved) || initialPageNumber;
+      }
+    }
+    return initialPageNumber;
+  };
+
+  const [pageNumber, setPageNumber] = useState(getInitialPageNumber);
   const [pageLength, setPageLength] = useState(initialPageLength);
   const [searchFilter, setSearchFilter] = useState<string>('');
   const [isSearchMode, setIsSearchMode] = useState<boolean>(false);
@@ -29,6 +39,8 @@ export const useStockData = (initialPageNumber = 1, initialPageLength = 20) => {
       let response;
       const currentSearchTerm = forceSearchTerm !== undefined ? forceSearchTerm : searchFilter;
       const currentSearchMode = forceSearchMode !== undefined ? forceSearchMode : isSearchMode;
+      
+      console.log('🔄 Fetching page', pageNumber, 'with search:', currentSearchTerm, 'mode:', currentSearchMode);
       
       if (currentSearchMode && currentSearchTerm) {
         // Use search endpoint
@@ -79,6 +91,12 @@ export const useStockData = (initialPageNumber = 1, initialPageLength = 20) => {
 
   const handlePageNumberChange = (newPageNumber: number) => {
     setPageNumber(newPageNumber);
+    // Don't auto-fetch, let user click refresh to navigate
+  };
+
+  const handlePageInputChange = (newPageNumber: number) => {
+    setPageNumber(newPageNumber);
+    localStorage.setItem('currentPageNumber', newPageNumber.toString());
   };
 
   const handlePageLengthChange = (newPageLength: number) => {
@@ -91,7 +109,11 @@ export const useStockData = (initialPageNumber = 1, initialPageLength = 20) => {
       const newSearchMode = search.length > 0;
       setSearchFilter(search);
       setIsSearchMode(newSearchMode);
-      setPageNumber(1);
+      if (search === '') {
+        // Only reset to page 1 when clearing search
+        setPageNumber(1);
+        localStorage.setItem('currentPageNumber', '1');
+      }
       // Immediately fetch with the new search parameters
       fetchStockData(search, newSearchMode);
     } else {
@@ -114,8 +136,10 @@ export const useStockData = (initialPageNumber = 1, initialPageLength = 20) => {
     pageNumber,
     pageLength,
     handlePageNumberChange,
+    handlePageInputChange,
     handlePageLengthChange,
     handleRefresh,
+    currentPageNumber: pageNumber,
     handleClearSearch,
     isSearchMode,
     searchFilter,

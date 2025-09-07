@@ -14,6 +14,7 @@ interface StockFiltersProps {
   filters: FiltersType;
   onFiltersChange: (filters: FiltersType) => void;
   onApplyFilter: () => void;
+  onClearAll?: () => void;
   loading?: boolean;
 }
 
@@ -24,7 +25,7 @@ interface StockFiltersProps {
  * @returns 
  */
 
-export const StockFilters = ({ filters, onFiltersChange, onApplyFilter, loading = false }: StockFiltersProps) => {
+export const StockFilters = ({ filters, onFiltersChange, onApplyFilter, onClearAll, loading = false }: StockFiltersProps) => {
   const [availableActions, setAvailableActions] = useState<string[]>([]);
 
   useEffect(() => {
@@ -63,6 +64,7 @@ export const StockFilters = ({ filters, onFiltersChange, onApplyFilter, loading 
               e.preventDefault();
               e.stopPropagation();
               clearFilters();
+              onClearAll?.();
             }}
             variant="outline" 
             size="sm"
