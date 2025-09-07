@@ -387,15 +387,27 @@ const docTemplate = `{
         "handlers.ChatRequest": {
             "type": "object",
             "properties": {
+                "conversation_memory": {
+                    "$ref": "#/definitions/handlers.ConversationMemory"
+                },
                 "message": {
                     "type": "string",
                     "example": "What are the best stocks to invest in today?"
+                },
+                "recent_messages": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/handlers.RecentMessage"
+                    }
                 }
             }
         },
         "handlers.ChatResponse": {
             "type": "object",
             "properties": {
+                "context_used": {
+                    "type": "string"
+                },
                 "generated_at": {
                     "type": "string",
                     "example": "2024-01-15T10:30:00Z"
@@ -407,6 +419,37 @@ const docTemplate = `{
                 "tokens_used": {
                     "type": "integer",
                     "example": 156
+                },
+                "updated_memory": {
+                    "$ref": "#/definitions/handlers.ConversationMemory"
+                }
+            }
+        },
+        "handlers.ConversationMemory": {
+            "type": "object",
+            "properties": {
+                "key_topics": {
+                    "type": "array",
+                    "items": {
+                        "type": "string"
+                    }
+                },
+                "last_context": {
+                    "type": "string"
+                },
+                "summary": {
+                    "type": "string"
+                }
+            }
+        },
+        "handlers.RecentMessage": {
+            "type": "object",
+            "properties": {
+                "content": {
+                    "type": "string"
+                },
+                "role": {
+                    "type": "string"
                 }
             }
         },

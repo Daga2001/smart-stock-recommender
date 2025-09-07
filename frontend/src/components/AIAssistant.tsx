@@ -3,7 +3,7 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
-import { Bot, MessageCircle, Send, Sparkles, TrendingUp } from 'lucide-react';
+import { Bot, MessageCircle, Send, Sparkles, TrendingUp, Activity } from 'lucide-react';
 import { stockService } from '../services/stockService';
 import ReactMarkdown from 'react-markdown';
 
@@ -17,6 +17,13 @@ interface ChatMessage {
   role: 'user' | 'assistant';
   content: string;
   timestamp: Date;
+  context?: string; // Store database context for this message
+}
+
+interface ConversationMemory {
+  summary: string;
+  keyTopics: string[];
+  lastContext: string;
 }
 
 export const AIAssistant = () => {
@@ -26,6 +33,11 @@ export const AIAssistant = () => {
   const [currentMessage, setCurrentMessage] = useState('');
   const [sendingMessage, setSendingMessage] = useState(false);
   const [isOpen, setIsOpen] = useState(false);
+  const [conversationMemory, setConversationMemory] = useState<ConversationMemory>({
+    summary: '',
+    keyTopics: [],
+    lastContext: ''
+  });
 
   useEffect(() => {
     loadSummary();
@@ -60,11 +72,18 @@ export const AIAssistant = () => {
     setSendingMessage(true);
 
     try {
-      // Call your backend chat endpoint (you'll need to create this)
+      // Enhanced chat with conversation memory
       const response = await fetch('http://localhost:8081/api/stocks/chat', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ message: currentMessage })
+        body: JSON.stringify({ 
+          message: currentMessage,
+          conversation_memory: conversationMemory,
+          recent_messages: chatMessages.slice(-4).map(msg => ({
+            role: msg.role,
+            content: msg.content
+          }))
+        })
       });
 
       if (response.ok) {
@@ -72,9 +91,15 @@ export const AIAssistant = () => {
         const assistantMessage: ChatMessage = {
           role: 'assistant',
           content: data.response,
-          timestamp: new Date()
+          timestamp: new Date(),
+          context: data.context_used
         };
         setChatMessages(prev => [...prev, assistantMessage]);
+        
+        // Update conversation memory
+        if (data.updated_memory) {
+          setConversationMemory(data.updated_memory);
+        }
       }
     } catch (error) {
       console.error('Failed to send chat message:', error);
@@ -167,11 +192,53 @@ export const AIAssistant = () => {
               
               <div className="flex flex-col h-96">
                 {/* Chat Messages */}
-                <div className="flex-1 overflow-y-auto space-y-4 p-4 border rounded-lg bg-muted/20">
+                <div className="flex-1 overflow-y-auto space-y-4 p-4 glass-card border border-border/50">
                   {chatMessages.length === 0 ? (
-                    <div className="text-center text-muted-foreground">
-                      <Bot className="h-8 w-8 mx-auto mb-2 opacity-50" />
-                      <p>Hi! I'm your AI stock assistant. Ask me anything about the market!</p>
+                    <div className="text-center space-y-6">
+                      <div className="flex items-center justify-center">
+                        <div className="p-4 rounded-xl bg-primary/20 animate-glow">
+                          <Bot className="h-12 w-12 text-primary" />
+                        </div>
+                      </div>
+                      <div className="space-y-4">
+                        <div>
+                          <h3 className="text-lg font-semibold mb-2">AI Stock Assistant</h3>
+                          <p className="text-muted-foreground">Ask me anything about stocks, market trends, or get investment advice</p>
+                        </div>
+                        
+                        <div className="glass-card border border-border/50 p-4 text-left space-y-3">
+                          <div className="flex items-center gap-2 mb-3">
+                            <Sparkles className="h-4 w-4 text-primary" />
+                            <span className="font-semibold text-primary">Pro Tips for Better Results</span>
+                          </div>
+                          
+                          <div className="space-y-3 text-sm">
+                            <div className="space-y-2">
+                              <div className="flex items-start gap-2">
+                                <span className="text-destructive font-medium">❌</span>
+                                <span className="text-muted-foreground">"What stocks are good?"</span>
+                              </div>
+                              <div className="flex items-start gap-2">
+                                <span className="text-success font-medium">✅</span>
+                                <span className="text-foreground font-medium">"Which biotech stocks have recent buy ratings from Goldman Sachs?"</span>
+                              </div>
+                            </div>
+                            
+                            <div className="h-px bg-border/50"></div>
+                            
+                            <div className="space-y-2">
+                              <div className="flex items-start gap-2">
+                                <span className="text-destructive font-medium">❌</span>
+                                <span className="text-muted-foreground">"Tell me about AAPL"</span>
+                              </div>
+                              <div className="flex items-start gap-2">
+                                <span className="text-success font-medium">✅</span>
+                                <span className="text-foreground font-medium">"What are AAPL's recent target price changes and analyst ratings?"</span>
+                              </div>
+                            </div>
+                          </div>
+                        </div>
+                      </div>
                     </div>
                   ) : (
                     chatMessages.map((message, index) => {
@@ -185,7 +252,7 @@ export const AIAssistant = () => {
                           key={index}
                           className={`flex ${messageAlignment}`}
                         >
-                          <div className={`max-w-[80%] p-3 rounded-lg ${messageStyle}`}>
+                          <div className={`max-w-[80%] p-3 rounded-lg ${messageStyle} ${message.role === 'assistant' ? 'glass-card' : ''}`}>
                             {message.role === 'assistant' ? (
                               <div className="text-sm prose prose-sm max-w-none dark:prose-invert">
                                 <ReactMarkdown 
@@ -213,28 +280,44 @@ export const AIAssistant = () => {
                   )}
                   {sendingMessage && (
                     <div className="flex justify-start">
-                      <div className="bg-background border p-3 rounded-lg">
-                        <Bot className="h-4 w-4 animate-spin" />
+                      <div className="glass-card border border-border/50 p-3 rounded-lg">
+                        <div className="flex items-center gap-2 text-muted-foreground">
+                          <Bot className="h-4 w-4 animate-spin" />
+                          <span className="text-sm">Analyzing market data...</span>
+                        </div>
                       </div>
                     </div>
                   )}
                 </div>
 
                 {/* Chat Input */}
-                <div className="flex gap-2 mt-4">
-                  <Input
-                    value={currentMessage}
-                    onChange={(e) => setCurrentMessage(e.target.value)}
-                    placeholder="Ask about stocks, trends, or get investment advice..."
-                    onKeyDown={(e) => e.key === 'Enter' && sendMessage()}
-                    disabled={sendingMessage}
-                  />
-                  <Button 
-                    onClick={sendMessage} 
-                    disabled={!currentMessage.trim() || sendingMessage}
-                  >
-                    <Send className="h-4 w-4" />
-                  </Button>
+                <div className="space-y-2">
+                  {conversationMemory.keyTopics && conversationMemory.keyTopics.length > 0 && (
+                    <div className="glass-card border border-border/50 p-2 rounded-lg">
+                      <div className="flex items-center gap-2 text-xs">
+                        <div className="p-1 rounded bg-primary/20">
+                          <Activity className="h-3 w-3 text-primary" />
+                        </div>
+                        <span className="font-medium text-muted-foreground">Active Context:</span>
+                        <span className="text-primary font-medium">{conversationMemory.keyTopics.join(', ')}</span>
+                      </div>
+                    </div>
+                  )}
+                  <div className="flex gap-2">
+                    <Input
+                      value={currentMessage}
+                      onChange={(e) => setCurrentMessage(e.target.value)}
+                      placeholder="Ask about stocks, trends, or get investment advice..."
+                      onKeyDown={(e) => e.key === 'Enter' && sendMessage()}
+                      disabled={sendingMessage}
+                    />
+                    <Button 
+                      onClick={sendMessage} 
+                      disabled={!currentMessage.trim() || sendingMessage}
+                    >
+                      <Send className="h-4 w-4" />
+                    </Button>
+                  </div>
                 </div>
               </div>
             </DialogContent>

@@ -15,12 +15,20 @@ definitions:
     type: object
   handlers.ChatRequest:
     properties:
+      conversation_memory:
+        $ref: '#/definitions/handlers.ConversationMemory'
       message:
         example: What are the best stocks to invest in today?
         type: string
+      recent_messages:
+        items:
+          $ref: '#/definitions/handlers.RecentMessage'
+        type: array
     type: object
   handlers.ChatResponse:
     properties:
+      context_used:
+        type: string
       generated_at:
         example: "2024-01-15T10:30:00Z"
         type: string
@@ -32,6 +40,26 @@ definitions:
       tokens_used:
         example: 156
         type: integer
+      updated_memory:
+        $ref: '#/definitions/handlers.ConversationMemory'
+    type: object
+  handlers.ConversationMemory:
+    properties:
+      key_topics:
+        items:
+          type: string
+        type: array
+      last_context:
+        type: string
+      summary:
+        type: string
+    type: object
+  handlers.RecentMessage:
+    properties:
+      content:
+        type: string
+      role:
+        type: string
     type: object
   handlers.RecommendationsResponse:
     properties:

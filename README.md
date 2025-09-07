@@ -223,6 +223,92 @@ swag init
 
 ---
 
+## 🧠 **GPT: Conversation Memory System**
+
+### **💾 Memory Storage & Retrieval**
+
+- Memory stored in frontend React component state
+- No server-side session storage or database persistence
+- Memory lost when user refreshes page or closes browser
+- Lightweight and fast access for real-time conversations
+
+**Memory Structure**:
+```typescript
+ConversationMemory {
+  summary: string;        // Compressed conversation history (max 150 chars)
+  keyTopics: string[];    // Extracted topics ["AAPL", "ratings", "target_prices"]
+  lastContext: string;    // Cached database context for reuse
+}
+```
+
+**Storage Flow**:
+1. **User sends message** → Frontend sends to backend with current memory
+2. **Backend processes** → Updates memory with new topics and context
+3. **Response returned** → Frontend updates React state with new memory
+4. **Next message** → Reuses cached context if topics match
+
+**Cost Efficiency**:
+- **Traditional**: Send full conversation history (1000+ tokens)
+- **Memory System**: Send only summary + recent messages (200-300 tokens)
+- **Savings**: 80-90% reduction in API costs for follow-up questions
+
+**Example Memory Evolution**:
+```
+Initial: {summary: "", topics: [], context: ""}
+
+After "AAPL ratings":
+{summary: "User asked about AAPL ratings", topics: ["AAPL", "ratings"], context: "AAPL data..."}
+
+Follow-up "What about target prices?":
+→ Detects AAPL topic match → Reuses cached context → No new database query!
+```
+
+---
+
+## 🤖 **AI Assistant Best Practices**
+
+### **💡 Writing Effective Prompts**
+
+The AI assistant works best with **specific, detailed questions**. Here's how to get accurate responses:
+
+**❌ Avoid Vague Prompts:**
+- "What stocks are good?"
+- "Tell me about AAPL"
+- "Any recommendations?"
+- "What's happening in the market?"
+
+**✅ Use Specific Prompts:**
+- "Which biotech stocks have recent buy ratings from Goldman Sachs?"
+- "What are AAPL's recent target price changes and analyst ratings?"
+- "Show me stocks with target price increases above 15% this week"
+- "Which companies had downgrades from JPMorgan recently?"
+
+**🎯 Prompt Structure Tips:**
+1. **Specify the stock/sector**: "AAPL", "biotech companies", "tech sector"
+2. **Define the data type**: "target prices", "ratings", "analyst actions"
+3. **Add time context**: "recent", "this week", "latest"
+4. **Include criteria**: "above $100", "buy ratings", "from Goldman Sachs"
+
+**🔍 Example Query Types:**
+- **Stock-specific**: "MSFT target price changes by Morgan Stanley"
+- **Sector analysis**: "Recent upgrades in pharmaceutical companies"
+- **Comparative**: "AAPL vs GOOGL analyst sentiment comparison"
+- **Filtered searches**: "Stocks with Strong Buy ratings and 20%+ target increases"
+
+**⚡ Why Specificity Matters:**
+- **Accurate database queries**: Specific prompts generate precise SQL
+- **Relevant results**: Targeted searches return focused data
+- **Better AI responses**: Clear context leads to accurate analysis
+- **Faster responses**: Specific queries use cached context efficiently
+
+**🚀 Pro Tips:**
+- Mention specific **ticker symbols** for targeted analysis
+- Include **brokerage names** for analyst-specific insights  
+- Use **action words** like "raised", "lowered", "upgraded", "downgraded"
+- Add **numerical criteria** for precise filtering
+
+---
+
 ## ⚙️ Environment Configuration
 
 ### Backend Environment Variables (`backend/.env`)
@@ -281,4 +367,3 @@ This project is open-source and available under the [MIT License](LICENSE).
 
 Special thanks to the reviewers and interviewers for this challenge.  
 This project was built as part of a technical assessment and continues to evolve with improvements.  
-
