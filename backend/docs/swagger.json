@@ -247,19 +247,34 @@
         },
         "/stocks/recommendations": {
             "get": {
-                "description": "Analyzes all stock ratings data using advanced algorithms to provide ranked investment recommendations. Considers target price changes, rating improvements, analyst sentiment, and market trends to identify the best investment opportunities.",
+                "description": "Analyzes all stock ratings data using configurable weighted algorithms to provide ranked investment recommendations. Considers target price changes, rating improvements, analyst sentiment, and market trends.",
                 "produces": [
                     "application/json"
                 ],
                 "tags": [
                     "recommendations"
                 ],
-                "summary": "Get AI-powered stock investment recommendations",
+                "summary": "Get quantitative stock investment recommendations",
+                "parameters": [
+                    {
+                        "type": "integer",
+                        "default": 10,
+                        "description": "Number of recommendations to return (3, 5, 10, 15, 20)",
+                        "name": "limit",
+                        "in": "query"
+                    }
+                ],
                 "responses": {
                     "200": {
                         "description": "Successfully generated stock recommendations with scoring and analysis",
                         "schema": {
                             "$ref": "#/definitions/handlers.RecommendationsResponse"
+                        }
+                    },
+                    "400": {
+                        "description": "Bad request - invalid limit parameter",
+                        "schema": {
+                            "$ref": "#/definitions/models.ErrorResponse"
                         }
                     },
                     "500": {

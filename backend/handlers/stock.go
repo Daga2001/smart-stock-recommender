@@ -696,14 +696,23 @@ type RecommendationsResponse struct {
 }
 
 // GetStockRecommendations analyzes stock data and provides investment recommendations
-// @Summary Get AI-powered stock investment recommendations
-// @Description Analyzes all stock ratings data using advanced algorithms to provide ranked investment recommendations. Considers target price changes, rating improvements, analyst sentiment, and market trends to identify the best investment opportunities.
+// @Summary Get quantitative stock investment recommendations
+// @Description Analyzes all stock ratings data using configurable weighted algorithms to provide ranked investment recommendations. Considers target price changes, rating improvements, analyst sentiment, and market trends.
 // @Tags recommendations
 // @Produce json
+// @Param limit query int false "Number of recommendations to return (3, 5, 10, 15, 20)" default(10)
 // @Success 200 {object} RecommendationsResponse "Successfully generated stock recommendations with scoring and analysis"
+// @Failure 400 {object} models.ErrorResponse "Bad request - invalid limit parameter"
 // @Failure 500 {object} models.GenericErrorResponse "Internal server error occurred during analysis"
 // @Router /stocks/recommendations [get]
 func (h *StockHandler) GetStockRecommendations(c *gin.Context) {
+	// Parse limit parameter
+	limitStr := c.DefaultQuery("limit", "10")
+	limit, err := strconv.Atoi(limitStr)
+	if err != nil || limit < 1 || limit > 50 {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid limit parameter. Must be between 1 and 50"})
+		return
+	}
 	// Query to get all stock data for analysis
 	query := `
 		SELECT ticker, company, action, brokerage, rating_from, rating_to, 
@@ -733,8 +742,8 @@ func (h *StockHandler) GetStockRecommendations(c *gin.Context) {
 		stocks = append(stocks, stock)
 	}
 
-	// Analyze and generate recommendations
-	recommendations := analyzeStocksForRecommendations(stocks)
+	// Analyze and generate recommendations with specified limit
+	recommendations := analyzeStocksForRecommendations(stocks, limit)
 
 	// Return top recommendations
 	c.JSON(http.StatusOK, RecommendationsResponse{
@@ -758,7 +767,7 @@ func (h *StockHandler) GetStockRecommendations(c *gin.Context) {
 // - Updated target prices and ratings
 // - Time decay (recent activity gets bonus points)
 // - Competitive ranking (a stock with 8.5 score today might drop to 7.8 tomorrow)
-func analyzeStocksForRecommendations(stocks []stockData) []StockRecommendation {
+func analyzeStocksForRecommendations(stocks []stockData, limit int) []StockRecommendation {
 	// STEP 1: Group stocks by ticker to get latest data per company
 	// This ensures we analyze the most recent analyst opinion for each stock
 	stockMap := make(map[string][]stockData)
@@ -826,10 +835,9 @@ func analyzeStocksForRecommendations(stocks []stockData) []StockRecommendation {
 		return recommendations[i].Score > recommendations[j].Score // Higher score = better rank
 	})
 
-	// STEP 5: Return top 10 recommendations (frontend takes first 3)
-	// Why top 10? Provides buffer for frontend to choose top 3
-	if len(recommendations) > 10 {
-		recommendations = recommendations[:10] // Slice to get first 10 elements
+	// STEP 5: Return top N recommendations based on user selection
+	if len(recommendations) > limit {
+		recommendations = recommendations[:limit] // Slice to get requested number
 	}
 
 	return recommendations // Sorted list: [highest_score, second_highest, third_highest, ...]
@@ -844,15 +852,29 @@ type ScoringWeights struct {
 	TimingWeight      float64 // Weight for recent activity (default: 0.1)
 }
 
+// validateWeights ensures weights sum to 100% (1.0)
+func (w ScoringWeights) validateWeights() error {
+	total := w.TargetPriceWeight + w.RatingWeight + w.ActionWeight + w.TimingWeight
+	if math.Abs(total-1.0) > 0.001 { // Allow small floating point errors
+		return fmt.Errorf("weights must sum to 100%%, got %.1f%%", total*100)
+	}
+	return nil
+}
+
 // getDefaultWeights returns the default scoring weights
 // These can be easily modified based on market conditions
 func getDefaultWeights() ScoringWeights {
-	return ScoringWeights{
+	weights := ScoringWeights{
 		TargetPriceWeight: 0.4, // 40% - Most important for speculative markets
 		RatingWeight:      0.3, // 30% - Professional analyst opinion
 		ActionWeight:      0.2, // 20% - Direction of analyst changes
 		TimingWeight:      0.1, // 10% - Recent activity bonus
 	}
+	// Validate weights on startup
+	if err := weights.validateWeights(); err != nil {
+		panic(fmt.Sprintf("Invalid default weights: %v", err))
+	}
+	return weights
 }
 
 // calculateStockScore implements the configurable weighted scoring algorithm
@@ -1093,7 +1115,7 @@ func (h *StockHandler) getRecommendationsForSummary() []StockRecommendation {
 		stocks = append(stocks, stock)
 	}
 
-	return analyzeStocksForRecommendations(stocks)
+	return analyzeStocksForRecommendations(stocks, 10) // Default limit for summary
 }
 
 // generateAISummary calls OpenAI gpt-4.1-nano to generate market summary
@@ -1107,7 +1129,7 @@ func (h *StockHandler) generateAISummary(recommendations []StockRecommendation) 
 		"messages": []map[string]string{
 			{
 				"role":    "system",
-				"content": "You are a professional financial analyst. Provide concise, actionable market summaries based on stock recommendation data. Focus on trends, top picks, and key insights. Keep responses under 200 words.",
+				"content": "You are a seasoned Wall Street equity research analyst with 15+ years of experience in fundamental analysis and market strategy. Analyze the provided stock data with the expertise of someone who has navigated multiple market cycles. Focus on: sector rotation patterns, valuation metrics implications, institutional sentiment shifts, and macroeconomic factors affecting target price revisions. Provide actionable insights for institutional investors. Keep analysis under 200 words but make every word count.",
 			},
 			{
 				"role":    "user",
@@ -1175,20 +1197,20 @@ func (h *StockHandler) buildSummaryPrompt(recommendations []StockRecommendation)
 		return "No stock recommendations available."
 	}
 
-	// Build a concise prompt summarizing the recommendations
-	prompt := "Analyze these stock recommendations and provide a market summary:\n\n"
+	// Build expert-level prompt for institutional analysis
+	prompt := "EQUITY RESEARCH BRIEF - Analyze the following analyst actions and provide institutional-grade market insights:\n\n"
 
-	// Include top recommendations in the prompt
+	// Include top 10 recommendations with detailed context
 	for i, rec := range recommendations {
-		if i >= 10 { // Limit to top 10 for prompt size
+		if i >= 10 { // Focus on top 10 for comprehensive analysis
 			break	
 		}
-		prompt += fmt.Sprintf("%d. %s (%s) - %s by %s\n   Rating: %s, Target: %s, Score: %.1f\n   Reason: %s\n\n",
-			i+1, rec.Company, rec.Ticker, rec.Recommendation, rec.Brokerage,
-			rec.CurrentRating, rec.TargetPrice, rec.Score, rec.Reason)
+		prompt += fmt.Sprintf("%d. %s (%s) - %s [Score: %.1f/10]\n   Brokerage: %s | Rating: %s | Target: %s\n   Catalyst: %s\n\n",
+			i+1, rec.Company, rec.Ticker, rec.Recommendation, rec.Score, rec.Brokerage,
+			rec.CurrentRating, rec.TargetPrice, rec.Reason)
 	}
 
-	prompt += "Provide insights on: market sentiment, top sectors, key trends, and investment outlook."
+	prompt += "ANALYSIS FRAMEWORK: Assess sector rotation dynamics, valuation expansion/contraction themes, earnings revision trends, and institutional positioning implications. Consider current market regime and provide tactical allocation insights."
 	return prompt
 }
 
