@@ -76,6 +76,7 @@ export const AIAssistant = () => {
         setChatMessages(prev => [...prev, assistantMessage]);
       }
     } catch (error) {
+      console.error('Failed to send chat message:', error);
       const errorMessage: ChatMessage = {
         role: 'assistant',
         content: 'Sorry, I encountered an error. Please try again.',
@@ -172,25 +173,26 @@ export const AIAssistant = () => {
                       <p>Hi! I'm your AI stock assistant. Ask me anything about the market!</p>
                     </div>
                   ) : (
-                    chatMessages.map((message, index) => (
-                      <div
-                        key={index}
-                        className={`flex ${message.role === 'user' ? 'justify-end' : 'justify-start'}`}
-                      >
+                    chatMessages.map((message, index) => {
+                      const messageAlignment = message.role === 'user' ? 'justify-end' : 'justify-start';
+                      const messageStyle = message.role === 'user' 
+                        ? 'bg-primary text-primary-foreground'
+                        : 'bg-background border';
+                      
+                      return (
                         <div
-                          className={`max-w-[80%] p-3 rounded-lg ${
-                            message.role === 'user'
-                              ? 'bg-primary text-primary-foreground'
-                              : 'bg-background border'
-                          }`}
+                          key={index}
+                          className={`flex ${messageAlignment}`}
                         >
-                          <p className="text-sm">{message.content}</p>
-                          <p className="text-xs opacity-70 mt-1">
-                            {message.timestamp.toLocaleTimeString()}
-                          </p>
+                          <div className={`max-w-[80%] p-3 rounded-lg ${messageStyle}`}>
+                            <p className="text-sm">{message.content}</p>
+                            <p className="text-xs opacity-70 mt-1">
+                              {message.timestamp.toLocaleTimeString()}
+                            </p>
+                          </div>
                         </div>
-                      </div>
-                    ))
+                      );
+                    })
                   )}
                   {sendingMessage && (
                     <div className="flex justify-start">

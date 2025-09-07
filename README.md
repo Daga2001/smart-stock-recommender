@@ -9,12 +9,11 @@ The system also provides intelligent stock recommendations to help users identif
 
 - 🔗 **External API Integration** – Securely connects to the stock data API with proper authentication and error handling.  
 - 🗄️ **Reliable Data Storage** – Persists data in CockroachDB for scalability and fault tolerance.  
-- ⚡ **High-Performance Backend** – Go server with parallel processing when fetching data from an API endpoint assigned for this challenge.  
 - 🚀 **Parallel Data Fetching** – Concurrent API calls with rate limiting and retry logic for maximum efficiency.  
 - 📝 **Interactive API Documentation** – Auto-generated Swagger docs with try-it-out functionality.  
 - 🎨 **Interactive UI** – Built with Vue 3, TypeScript, Pinia, and styled with Tailwind CSS.  
 - 🔍 **Advanced Search & Filter** – RegEx-powered search across all fields in a stock information dataset (ticker, company, brokerage, action, ratings).  
-- 📊 **Comprehensive Dashboard** – Market analytics overview with statistics cards, unique tickers tracking, and professional insights.  
+- 📊 **Comprehensive Dashboard** – Market analytics overview with statistics cards and professional insights.  
 - 🤖 **Statistical Recommendations** – Configurable weighted scoring system analyzing target price changes (40%), rating analysis (30%), action analysis (20%), and timing factors (10%).  
 - 🎯 **Dynamic Top N Recommendations** – Flexible recommendation display (3, 5, 10, 15, 20 picks) with responsive grid layout.  
 - 🧠 **AI Market Analysis** – GPT-4.1-nano powered market summaries with Wall Street analyst-level insights and interactive chat functionality.  
@@ -253,7 +252,7 @@ swag init
 - [x] **SQL Injection Protection** – Parameterized queries and input validation
 - [x] **Hot Reload Development** – Air tool for automatic server restarts
 - [x] **Statistical Recommendations** – Configurable weighted scoring algorithm with validation
-- [x] **Market Analytics Dashboard** – Professional statistics overview with unique tickers tracking
+- [x] **Market Analytics Dashboard** – Valuable statistics overview with AI assisted recommendations.
 - [x] **AI Market Analysis** – GPT-4.1-nano integration with Wall Street analyst-level insights
 - [x] **Dynamic Recommendations** – Flexible Top N display with pagination persistence
 - [x] **Interactive AI Chat** – Real-time market discussion and analysis capabilities

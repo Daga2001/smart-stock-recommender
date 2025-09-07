@@ -10,12 +10,13 @@ import (
 	"log"
 	"os"
 	"smart-stock-recommender/database"
-	"smart-stock-recommender/handlers"
 	_ "smart-stock-recommender/docs"
+	"smart-stock-recommender/handlers"
+
 	"github.com/gin-gonic/gin"
 	"github.com/joho/godotenv"
-	ginSwagger "github.com/swaggo/gin-swagger"
 	swaggerFiles "github.com/swaggo/files"
+	ginSwagger "github.com/swaggo/gin-swagger"
 )
 
 // main is the entry point of the application.
@@ -91,11 +92,11 @@ func createTables(db *sql.DB) {
 	CREATE TABLE IF NOT EXISTS stock_ratings (
 		id SERIAL PRIMARY KEY,
 		ticker VARCHAR(10) NOT NULL,
-		target_from VARCHAR(20),
-		target_to VARCHAR(20),
-		company VARCHAR(255),
-		action VARCHAR(100),
-		brokerage VARCHAR(255),
+		target_from VARCHAR(20) NOT NULL,
+		target_to VARCHAR(20) NOT NULL,
+		company VARCHAR(255) NOT NULL,
+		action VARCHAR(100) NOT NULL,
+		brokerage VARCHAR(255) NOT NULL,
 		rating_from VARCHAR(50),
 		rating_to VARCHAR(50),
 		time TIMESTAMP,

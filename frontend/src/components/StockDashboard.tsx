@@ -160,7 +160,7 @@ export const StockDashboard = ({
           <div>
             <h2 className="text-xl font-semibold mb-2">Market Analytics Overview</h2>
             <p className="text-muted-foreground text-sm">
-              Real-time analysis of analyst actions and market sentiment based on target price changes and rating adjustments
+              Statistical analysis of brokerage actions based on target price changes and rating adjustments
             </p>
           </div>
           
@@ -268,11 +268,11 @@ export const StockDashboard = ({
         </div>
 
         {/* AI Assistant Section */}
-        {/* <div className="mb-12 animate-slide-up" style={{ animationDelay: '0.4s' }}>
+        <div className="mb-12 animate-slide-up" style={{ animationDelay: '0.4s' }}>
           <AIAssistant />
-        </div> */}
+        </div>
 
-        {/* Top 3 AI Recommendations Section */}
+        {/* Top N Recommendations Section */}
         <div className="mb-12 animate-slide-up" style={{ animationDelay: '0.5s' }}>
           <StockRecommendations />
         </div>
@@ -314,7 +314,7 @@ export const StockDashboard = ({
                 Market Analysis
               </h2>
               <p className="text-muted-foreground mt-1">
-                Professional-grade stock analysis and recommendations
+                Professional Stock Analysis Table
               </p>
             </div>
             <div className="text-right">

@@ -1225,14 +1225,14 @@ type ChatRequest struct {
 	Message string `json:"message" example:"What are the best stocks to invest in today?"`
 }
 
-// GetStockChat provides AI-powered chat responses about stock market
-// @Summary Chat with AI about stock market
-// @Description Interactive chat with gpt-4.1-nano for personalized stock analysis, market insights, and investment advice based on current data.
+// GetStockChat provides AI-powered chat responses with RAG (Retrieval-Augmented Generation)
+// @Summary Chat with AI about stock market with database context
+// @Description Interactive chat with gpt-4.1-nano that can query the database for specific stock information and provide personalized analysis based on actual data.
 // @Tags ai-analysis
 // @Accept json
 // @Produce json
 // @Param request body ChatRequest true "Chat message from user"
-// @Success 200 {object} ChatResponse "Successfully generated AI chat response"
+// @Success 200 {object} ChatResponse "Successfully generated AI chat response with database context"
 // @Failure 400 {object} models.ErrorResponse "Bad request - missing message"
 // @Failure 500 {object} models.GenericErrorResponse "Internal server error or OpenAI API error"
 // @Router /stocks/chat [post]
@@ -1251,12 +1251,15 @@ func (h *StockHandler) GetStockChat(c *gin.Context) {
 		return
 	}
 
-	// Get context from recent recommendations
-	recommendations := h.getRecommendationsForSummary()
-	context := h.buildChatContext(recommendations)
+	// RAG: Retrieve relevant data based on user query
+	dbContext, err := h.retrieveRelevantData(req.Message)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": fmt.Sprintf("Failed to retrieve data: %v", err)})
+		return
+	}
 
-	// Generate AI response
-	response, tokensUsed, err := h.generateChatResponse(req.Message, context)
+	// Generate AI response with database context
+	response, tokensUsed, err := h.generateChatResponse(req.Message, dbContext)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": fmt.Sprintf("Failed to generate response: %v", err)})
 		return
@@ -1276,14 +1279,14 @@ func (h *StockHandler) generateChatResponse(userMessage, context string) (string
 		"messages": []map[string]string{
 			{
 				"role":    "system",
-				"content": "You are a professional financial advisor with access to current stock market data. Provide helpful, accurate investment advice based on the provided market context. Keep responses concise and actionable. Context: " + context,
+				"content": "You are a professional financial advisor with access to real-time stock market database. Use the provided database context to answer questions accurately. When users ask about specific stocks, sectors, or market trends, reference the actual data provided. If asked about stocks not in the context, clearly state data limitations. Keep responses helpful and actionable.\n\nDatabase Context:\n" + context,
 			},
 			{
 				"role":    "user",
 				"content": userMessage,
 			},
 		},
-		"max_tokens":   300,
+		"max_tokens":   400,
 		"temperature": 0.7,
 	}
 
@@ -1337,21 +1340,283 @@ func (h *StockHandler) generateChatResponse(userMessage, context string) (string
 	return openAIResp.Choices[0].Message.Content, openAIResp.Usage.TotalTokens, nil
 }
 
-// buildChatContext creates context for chat responses
-func (h *StockHandler) buildChatContext(recommendations []StockRecommendation) string {
-	if len(recommendations) == 0 {
-		return "No current stock recommendations available."
+// retrieveRelevantData implements flexible RAG using AI-powered SQL generation
+//
+// ENHANCED RAG ARCHITECTURE:
+// Instead of rigid keyword matching, this system uses AI to understand user intent
+// and dynamically generate appropriate SQL queries for any question.
+//
+// FLEXIBLE RAG PROCESS:
+// STEP 1: Send user question + database schema to AI
+// STEP 2: AI generates appropriate SQL query based on natural language
+// STEP 3: Execute generated SQL safely with validation
+// STEP 4: Format results as structured context
+// STEP 5: Use context for final response generation
+//
+// EXAMPLES OF FLEXIBLE QUERIES:
+// "stocks with highest target price increase" -> AI generates SQL with price calculations
+// "biotech companies with buy ratings" -> AI generates sector + rating filters
+// "recent downgrades by Goldman Sachs" -> AI generates time + brokerage + action filters
+// "top 5 stocks by analyst consensus" -> AI generates grouping and ranking logic
+//
+// ADVANTAGES:
+// ✅ Handles any natural language query
+// ✅ No predefined keyword limitations
+// ✅ Dynamic SQL generation
+// ✅ Flexible and extensible
+// ✅ Maintains SQL injection protection
+func (h *StockHandler) retrieveRelevantData(userMessage string) (string, error) {
+	// STEP 1: Generate SQL query using AI based on user question
+	println("🤖 RAG: Generating SQL for question:", userMessage)
+	sqlQuery, err := h.generateSQLFromQuestion(userMessage)
+	if err != nil {
+		println("❌ RAG: Failed to generate SQL:", err.Error())
+		return "", fmt.Errorf("failed to generate SQL: %v", err)
+	}
+	println("📝 RAG: Generated SQL Query:")
+	println("   ", sqlQuery)
+
+	// STEP 2: Validate and execute the generated SQL safely
+	println("🔍 RAG: Validating and executing SQL...")
+	results, err := h.executeSafeSQL(sqlQuery)
+	if err != nil {
+		println("❌ RAG: Failed to execute SQL:", err.Error())
+		return "", fmt.Errorf("failed to execute query: %v", err)
+	}
+	println("✅ RAG: SQL executed successfully, found", len(results), "results")
+
+	// STEP 3: Format results as structured context
+	context := h.formatQueryResults(results, userMessage)
+	println("📊 RAG: Context formatted, length:", len(context), "characters")
+	return context, nil
+}
+
+// generateSQLFromQuestion uses AI to convert natural language to SQL
+func (h *StockHandler) generateSQLFromQuestion(question string) (string, error) {
+	schema := `
+	Database Schema:
+	Table: stock_ratings
+	Columns:
+	- id (SERIAL PRIMARY KEY)
+	- ticker (VARCHAR(10)) - Stock symbol like 'AAPL', 'MSFT'
+	- target_from (VARCHAR(20)) - Previous target price like '$150.00', '$1,250.00'
+	- target_to (VARCHAR(20)) - New target price like '$180.00', '$6,250.00'
+	- company (VARCHAR(255)) - Company name like 'Apple Inc.'
+	- action (VARCHAR(100)) - Analyst action like 'target raised by', 'upgraded'
+	- brokerage (VARCHAR(255)) - Analyst firm like 'Goldman Sachs'
+	- rating_from (VARCHAR(50)) - Previous rating like 'Hold'
+	- rating_to (VARCHAR(50)) - New rating like 'Buy', 'Strong Buy'
+	- time (TIMESTAMP) - When analyst made the report
+	- created_at (TIMESTAMP) - When record was inserted
+	
+	IMPORTANT: Price fields contain dollar signs and commas. Use CAST(REPLACE(REPLACE(column, '$', ''), ',', '') AS NUMERIC) for calculations.
+	`
+
+	prompt := fmt.Sprintf(`%s
+
+	Generate a PostgreSQL query for: "%s"
+
+	Rules:
+	1. Only SELECT queries allowed
+	2. Use LIMIT to prevent large results (max 50)
+	3. Include relevant columns for the question
+	4. Use proper SQL syntax
+	5. Return only the SQL query, no explanations
+	6. For price calculations, use: CAST(REPLACE(REPLACE(column, '$', ''), ',', '') AS NUMERIC)
+	7. Price fields (target_from, target_to) may contain commas and dollar signs
+
+	SQL:`, schema, question)
+
+	println("🧠 AI: Sending prompt to OpenAI for SQL generation...")
+	println("📋 AI: Question:", question)
+
+	reqBody := map[string]interface{}{
+		"model": "gpt-4.1-nano",
+		"messages": []map[string]string{
+			{
+				"role":    "system",
+				"content": "You are a SQL expert. Generate safe PostgreSQL queries based on user questions. Only return the SQL query.",
+			},
+			{
+				"role":    "user",
+				"content": prompt,
+			},
+		},
+		"max_tokens":   200,
+		"temperature": 0.1,
 	}
 
-	context := "Current top stock recommendations: "
-	for i, rec := range recommendations {
-		if i >= 5 { // Limit context size
+	reqJSON, _ := json.Marshal(reqBody)
+	req, err := http.NewRequest("POST", "https://api.openai.com/v1/chat/completions", strings.NewReader(string(reqJSON)))
+	if err != nil {
+		return "", err
+	}
+
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("Authorization", "Bearer "+os.Getenv("OPENAI_API_KEY"))
+
+	client := &http.Client{Timeout: 30 * time.Second}
+	resp, err := client.Do(req)
+	if err != nil {
+		return "", err
+	}
+	defer resp.Body.Close()
+
+	var openAIResp struct {
+		Choices []struct {
+			Message struct {
+				Content string `json:"content"`
+			} `json:"message"`
+		} `json:"choices"`
+	}
+
+	if err := json.NewDecoder(resp.Body).Decode(&openAIResp); err != nil {
+		return "", err
+	}
+
+	if len(openAIResp.Choices) == 0 {
+		return "", fmt.Errorf("no SQL generated")
+	}
+
+	sqlQuery := strings.TrimSpace(openAIResp.Choices[0].Message.Content)
+	sqlQuery = strings.Trim(sqlQuery, "`")
+	println("✅ AI: SQL generated successfully")
+	println("🔧 AI: Raw SQL from OpenAI:", sqlQuery)
+	return sqlQuery, nil
+}
+
+// executeSafeSQL validates and executes the generated SQL query
+func (h *StockHandler) executeSafeSQL(sqlQuery string) ([]map[string]interface{}, error) {
+	// Basic SQL injection protection
+	println("🔒 Security: Validating SQL query for safety...")
+	sqlLower := strings.ToLower(sqlQuery)
+	if !strings.HasPrefix(sqlLower, "select") {
+		println("❌ Security: Non-SELECT query blocked:", sqlQuery)
+		return nil, fmt.Errorf("only SELECT queries allowed")
+	}
+	if strings.Contains(sqlLower, "drop") || strings.Contains(sqlLower, "delete") || strings.Contains(sqlLower, "update") || strings.Contains(sqlLower, "insert") {
+		println("❌ Security: Dangerous SQL operation blocked:", sqlQuery)
+		return nil, fmt.Errorf("dangerous SQL operations not allowed")
+	}
+	println("✅ Security: SQL query validated as safe")
+
+	println("💾 Database: Executing SQL query...")
+	rows, err := h.DB.Query(sqlQuery)
+	if err != nil {
+		println("❌ Database: Query execution failed:", err.Error())
+		println("🔍 Database: Failed query was:", sqlQuery)
+		return nil, err
+	}
+	defer rows.Close()
+
+	columns, err := rows.Columns()
+	if err != nil {
+		println("❌ Database: Failed to get columns:", err.Error())
+		return nil, err
+	}
+	println("📋 Database: Query columns:", columns)
+
+	var results []map[string]interface{}
+	rowCount := 0
+	for rows.Next() {
+		rowCount++
+		values := make([]interface{}, len(columns))
+		valuePtrs := make([]interface{}, len(columns))
+		for i := range columns {
+			valuePtrs[i] = &values[i]
+		}
+
+		if err := rows.Scan(valuePtrs...); err != nil {
+			println("⚠️  Database: Skipping row", rowCount, "due to scan error:", err.Error())
+			continue
+		}
+
+		row := make(map[string]interface{})
+		for i, col := range columns {
+			if values[i] != nil {
+				row[col] = values[i]
+			}
+		}
+		results = append(results, row)
+		
+		// Log first few rows for debugging
+		if rowCount <= 3 {
+			println(fmt.Sprintf("📄 Database: Row %d sample:", rowCount), fmt.Sprintf("%+v", row))
+		}
+	}
+
+	println("📊 Database: Total rows processed:", rowCount, "| Results collected:", len(results))
+	return results, nil
+}
+
+// formatQueryResults formats the SQL results into readable context
+func (h *StockHandler) formatQueryResults(results []map[string]interface{}, question string) string {
+	println("📝 Formatting: Starting to format", len(results), "results for question:", question)
+	if len(results) == 0 {
+		println("⚠️  Formatting: No results to format")
+		return "No data found for your query."
+	}
+
+	var context strings.Builder
+	context.WriteString(fmt.Sprintf("Query results for: %s\n\n", question))
+
+	formattedRows := 0
+	for i, row := range results {
+		if i >= 20 { // Limit context size
+			context.WriteString("... (showing first 20 results)\n")
+			println("📄 Formatting: Truncated results at 20 items")
 			break
 		}
-		context += fmt.Sprintf("%s (%s) - %s, Score: %.1f; ", rec.Company, rec.Ticker, rec.Recommendation, rec.Score)
+
+		// Format each row based on available columns
+		if ticker, ok := row["ticker"]; ok {
+			if company, ok := row["company"]; ok {
+				context.WriteString(fmt.Sprintf("%v (%v)", company, ticker))
+			} else {
+				context.WriteString(fmt.Sprintf("%v", ticker))
+			}
+		}
+
+		if rating, ok := row["rating_to"]; ok {
+			context.WriteString(fmt.Sprintf(" - Rating: %v", rating))
+		}
+		if target, ok := row["target_to"]; ok {
+			context.WriteString(fmt.Sprintf(" - Target: %v", target))
+		}
+		if action, ok := row["action"]; ok {
+			context.WriteString(fmt.Sprintf(" - Action: %v", action))
+		}
+		if brokerage, ok := row["brokerage"]; ok {
+			context.WriteString(fmt.Sprintf(" - Brokerage: %v", brokerage))
+		}
+
+		// Add any calculated fields
+		for key, value := range row {
+			if !contains([]string{"ticker", "company", "rating_to", "target_to", "action", "brokerage"}, key) {
+				context.WriteString(fmt.Sprintf(" - %s: %v", key, value))
+			}
+		}
+
+		context.WriteString("\n")
+		formattedRows++
 	}
-	return context
+
+	println("✅ Formatting: Successfully formatted", formattedRows, "rows")
+	println("📏 Formatting: Final context length:", len(context.String()), "characters")
+	return context.String()
 }
+
+// contains checks if a slice contains a string
+func contains(slice []string, item string) bool {
+	for _, s := range slice {
+		if s == item {
+			return true
+		}
+	}
+	return false
+}
+
+
 
 // GetStockMetrics calculates and returns comprehensive market metrics from stock ratings data
 // @Summary Get comprehensive stock market analytics and metrics

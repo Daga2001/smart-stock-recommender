@@ -135,7 +135,7 @@ const docTemplate = `{
         },
         "/stocks/chat": {
             "post": {
-                "description": "Interactive chat with gpt-4.1-nano for personalized stock analysis, market insights, and investment advice based on current data.",
+                "description": "Interactive chat with gpt-4.1-nano that can query the database for specific stock information and provide personalized analysis based on actual data.",
                 "consumes": [
                     "application/json"
                 ],
@@ -145,7 +145,7 @@ const docTemplate = `{
                 "tags": [
                     "ai-analysis"
                 ],
-                "summary": "Chat with AI about stock market",
+                "summary": "Chat with AI about stock market with database context",
                 "parameters": [
                     {
                         "description": "Chat message from user",
@@ -159,7 +159,7 @@ const docTemplate = `{
                 ],
                 "responses": {
                     "200": {
-                        "description": "Successfully generated AI chat response",
+                        "description": "Successfully generated AI chat response with database context",
                         "schema": {
                             "$ref": "#/definitions/handlers.ChatResponse"
                         }
