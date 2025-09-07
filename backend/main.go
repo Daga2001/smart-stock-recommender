@@ -65,6 +65,8 @@ func main() {
 		api.POST("/stocks", stockHandler.GetStocksByPage)
 		api.POST("/stocks/bulk", stockHandler.GetStocksBulk)
 		api.POST("/stocks/list", stockHandler.GetStockRatings)
+		api.POST("/stocks/search", stockHandler.SearchStockRatings)
+		api.GET("/stocks/actions", stockHandler.GetStockActions)
 		api.GET("/stocks/metrics", stockHandler.GetStockMetrics)
 	}
 

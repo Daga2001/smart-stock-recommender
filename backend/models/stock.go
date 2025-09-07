@@ -42,3 +42,9 @@ type PaginationRequest struct {
 	PageNumber int `json:"page_number" binding:"required" example:"1"`
 	PageLength int `json:"page_length" binding:"required" example:"20"`
 }
+
+type SearchRequest struct {
+	PageNumber int    `json:"page_number" binding:"required" example:"1"`
+	PageLength int    `json:"page_length" binding:"required" example:"20"`
+	SearchTerm string `json:"search_term" binding:"required" example:"AAPL"`
+}

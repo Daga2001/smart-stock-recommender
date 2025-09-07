@@ -61,6 +61,32 @@ const docTemplate = `{
                 }
             }
         },
+        "/stocks/actions": {
+            "get": {
+                "description": "Retrieves a list of all unique action types found in the stock ratings database, sorted alphabetically. Used for populating filter dropdowns and ensuring UI reflects actual data.",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "stocks"
+                ],
+                "summary": "Get all available stock actions",
+                "responses": {
+                    "200": {
+                        "description": "Successfully retrieved list of unique actions",
+                        "schema": {
+                            "$ref": "#/definitions/handlers.ActionsResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal server error occurred",
+                        "schema": {
+                            "$ref": "#/definitions/models.GenericErrorResponse"
+                        }
+                    }
+                }
+            }
+        },
         "/stocks/bulk": {
             "post": {
                 "description": "Clears existing database data, then fetches stock data from external API for a range of pages using parallel processing. Returns summary statistics of the operation.",
@@ -178,9 +204,73 @@ const docTemplate = `{
                     }
                 }
             }
+        },
+        "/stocks/search": {
+            "post": {
+                "description": "Searches through stock ratings using a search term that matches ticker, company, brokerage, action, or ratings. Returns paginated results with metadata.",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "stocks"
+                ],
+                "summary": "Search stock ratings with pagination",
+                "parameters": [
+                    {
+                        "description": "Search parameters with page_number (integer, min 1), page_length (integer, 1-1000), and search_term (string, required)",
+                        "name": "request",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/models.SearchRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Successfully retrieved filtered stock ratings with pagination metadata",
+                        "schema": {
+                            "$ref": "#/definitions/models.PaginatedResponse"
+                        }
+                    },
+                    "400": {
+                        "description": "Bad request - invalid JSON, missing search_term, page_number \u003c= 0, or page_length not between 1-1000",
+                        "schema": {
+                            "$ref": "#/definitions/models.ErrorResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal server error occurred",
+                        "schema": {
+                            "$ref": "#/definitions/models.GenericErrorResponse"
+                        }
+                    }
+                }
+            }
         }
     },
     "definitions": {
+        "handlers.ActionsResponse": {
+            "type": "object",
+            "properties": {
+                "actions": {
+                    "type": "array",
+                    "items": {
+                        "type": "string"
+                    },
+                    "example": [
+                        "initiated by",
+                        "target raised by",
+                        "target lowered by",
+                        "reiterated by",
+                        "upgraded"
+                    ]
+                }
+            }
+        },
         "models.ActiveStock": {
             "type": "object",
             "properties": {
@@ -438,6 +528,28 @@ const docTemplate = `{
                 "page_number": {
                     "type": "integer",
                     "example": 1
+                }
+            }
+        },
+        "models.SearchRequest": {
+            "type": "object",
+            "required": [
+                "page_length",
+                "page_number",
+                "search_term"
+            ],
+            "properties": {
+                "page_length": {
+                    "type": "integer",
+                    "example": 20
+                },
+                "page_number": {
+                    "type": "integer",
+                    "example": 1
+                },
+                "search_term": {
+                    "type": "string",
+                    "example": "AAPL"
                 }
             }
         },

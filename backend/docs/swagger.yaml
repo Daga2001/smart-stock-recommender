@@ -1,5 +1,18 @@
 basePath: /api
 definitions:
+  handlers.ActionsResponse:
+    properties:
+      actions:
+        example:
+        - initiated by
+        - target raised by
+        - target lowered by
+        - reiterated by
+        - upgraded
+        items:
+          type: string
+        type: array
+    type: object
   models.ActiveStock:
     properties:
       company:
@@ -181,6 +194,22 @@ definitions:
     - page_length
     - page_number
     type: object
+  models.SearchRequest:
+    properties:
+      page_length:
+        example: 20
+        type: integer
+      page_number:
+        example: 1
+        type: integer
+      search_term:
+        example: AAPL
+        type: string
+    required:
+    - page_length
+    - page_number
+    - search_term
+    type: object
   models.StockRatings:
     properties:
       action:
@@ -267,6 +296,25 @@ paths:
           schema:
             $ref: '#/definitions/models.GenericErrorResponse'
       summary: Fetch stocks by page number
+      tags:
+      - stocks
+  /stocks/actions:
+    get:
+      description: Retrieves a list of all unique action types found in the stock
+        ratings database, sorted alphabetically. Used for populating filter dropdowns
+        and ensuring UI reflects actual data.
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Successfully retrieved list of unique actions
+          schema:
+            $ref: '#/definitions/handlers.ActionsResponse'
+        "500":
+          description: Internal server error occurred
+          schema:
+            $ref: '#/definitions/models.GenericErrorResponse'
+      summary: Get all available stock actions
       tags:
       - stocks
   /stocks/bulk:
@@ -357,4 +405,39 @@ paths:
       summary: Get comprehensive stock market analytics and metrics
       tags:
       - analytics
+  /stocks/search:
+    post:
+      consumes:
+      - application/json
+      description: Searches through stock ratings using a search term that matches
+        ticker, company, brokerage, action, or ratings. Returns paginated results
+        with metadata.
+      parameters:
+      - description: Search parameters with page_number (integer, min 1), page_length
+          (integer, 1-1000), and search_term (string, required)
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/models.SearchRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Successfully retrieved filtered stock ratings with pagination
+            metadata
+          schema:
+            $ref: '#/definitions/models.PaginatedResponse'
+        "400":
+          description: Bad request - invalid JSON, missing search_term, page_number
+            <= 0, or page_length not between 1-1000
+          schema:
+            $ref: '#/definitions/models.ErrorResponse'
+        "500":
+          description: Internal server error occurred
+          schema:
+            $ref: '#/definitions/models.GenericErrorResponse'
+      summary: Search stock ratings with pagination
+      tags:
+      - stocks
 swagger: "2.0"

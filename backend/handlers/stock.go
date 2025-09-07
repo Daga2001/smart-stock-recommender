@@ -511,6 +511,152 @@ func (h *StockHandler) GetStockRatings(c *gin.Context) {
 	})
 }
 
+// SearchStockRatings searches stock ratings based on search term with pagination
+// @Summary Search stock ratings with pagination
+// @Description Searches through stock ratings using a search term that matches ticker, company, brokerage, action, or ratings. Returns paginated results with metadata.
+// @Tags stocks
+// @Accept json
+// @Produce json
+// @Param request body models.SearchRequest true "Search parameters with page_number (integer, min 1), page_length (integer, 1-1000), and search_term (string, required)"
+// @Success 200 {object} models.PaginatedResponse "Successfully retrieved filtered stock ratings with pagination metadata"
+// @Failure 400 {object} models.ErrorResponse "Bad request - invalid JSON, missing search_term, page_number <= 0, or page_length not between 1-1000"
+// @Failure 500 {object} models.GenericErrorResponse "Internal server error occurred"
+// @Router /stocks/search [post]
+func (h *StockHandler) SearchStockRatings(c *gin.Context) {
+	var req models.SearchRequest
+
+	// Parse request body
+	if err := json.NewDecoder(c.Request.Body).Decode(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid JSON format in request body"})
+		return
+	}
+
+	// Validate search parameters
+	if req.PageNumber <= 0 {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "page_number must be greater than 0"})
+		return
+	}
+
+	if req.SearchTerm == "" {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "search_term is required"})
+		return
+	}
+
+	// Calculate offset for pagination
+	offset := (req.PageNumber - 1) * req.PageLength
+
+	// Get total count for search results
+	countQuery := `
+		SELECT COUNT(*) FROM stock_ratings 
+		WHERE LOWER(ticker) LIKE LOWER($1) OR LOWER(company) LIKE LOWER($1) OR LOWER(brokerage) LIKE LOWER($1) 
+		   OR LOWER(action) LIKE LOWER($1) OR LOWER(rating_from) LIKE LOWER($1) OR LOWER(rating_to) LIKE LOWER($1)`
+	searchPattern := "%" + req.SearchTerm + "%"
+	println("🔍 Searching for:", req.SearchTerm, "| Pattern:", searchPattern)
+	
+	var totalCount int
+	err := h.DB.QueryRow(countQuery, searchPattern).Scan(&totalCount)
+	if err != nil {
+		println("❌ Search count error:", err.Error())
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to get search count"})
+		return
+	}
+	println("📊 Found", totalCount, "matching records")
+
+	// Query filtered and paginated data
+	query := `
+		SELECT id, ticker, target_from, target_to, company, action, brokerage, rating_from, rating_to, time, created_at
+		FROM stock_ratings
+		WHERE LOWER(ticker) LIKE LOWER($1) OR LOWER(company) LIKE LOWER($1) OR LOWER(brokerage) LIKE LOWER($1) 
+		   OR LOWER(action) LIKE LOWER($1) OR LOWER(rating_from) LIKE LOWER($1) OR LOWER(rating_to) LIKE LOWER($1)
+		ORDER BY created_at DESC, id DESC
+		LIMIT $2 OFFSET $3`
+
+	rows, err := h.DB.Query(query, searchPattern, req.PageLength, offset)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to search stock ratings"})
+		return
+	}
+	defer rows.Close()
+
+	// Parse results
+	var stocks []models.StockRatings
+	for rows.Next() {
+		var stock models.StockRatings
+		err := rows.Scan(
+			&stock.ID, &stock.Ticker, &stock.TargetFrom, &stock.TargetTo,
+			&stock.Company, &stock.Action, &stock.Brokerage,
+			&stock.RatingFrom, &stock.RatingTo, &stock.Time, &stock.CreatedAt)
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to scan search results"})
+			return
+		}
+		stocks = append(stocks, stock)
+	}
+
+	// Calculate pagination metadata
+	totalPages := (totalCount + req.PageLength - 1) / req.PageLength
+	hasNext := req.PageNumber < totalPages
+	hasPrev := req.PageNumber > 1
+
+	// Return search results with pagination
+	c.JSON(http.StatusOK, gin.H{
+		"data": stocks,
+		"pagination": gin.H{
+			"page_number":   req.PageNumber,
+			"page_length":   req.PageLength,
+			"total_records": totalCount,
+			"total_pages":   totalPages,
+			"has_next":      hasNext,
+			"has_previous":  hasPrev,
+		},
+		"search_term": req.SearchTerm,
+	})
+}
+
+// ActionsResponse represents the response structure for stock actions
+type ActionsResponse struct {
+	Actions []string `json:"actions" example:"initiated by,target raised by,target lowered by,reiterated by,upgraded"`
+}
+
+// GetStockActions retrieves all unique action types from the database
+// @Summary Get all available stock actions
+// @Description Retrieves a list of all unique action types found in the stock ratings database, sorted alphabetically. Used for populating filter dropdowns and ensuring UI reflects actual data.
+// @Tags stocks
+// @Produce json
+// @Success 200 {object} ActionsResponse "Successfully retrieved list of unique actions"
+// @Failure 500 {object} models.GenericErrorResponse "Internal server error occurred"
+// @Router /stocks/actions [get]
+func (h *StockHandler) GetStockActions(c *gin.Context) {
+	// Query to get all unique actions from the database
+	query := `
+		SELECT DISTINCT action 
+		FROM stock_ratings 
+		WHERE action IS NOT NULL AND action != '' 
+		ORDER BY action ASC`
+
+	rows, err := h.DB.Query(query)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to query stock actions"})
+		return
+	}
+	defer rows.Close()
+
+	// Collect all unique actions
+	var actions []string
+	for rows.Next() {
+		var action string
+		if err := rows.Scan(&action); err != nil {
+			continue // Skip invalid rows
+		}
+		actions = append(actions, action)
+	}
+
+	// Return the list of actions
+	c.JSON(http.StatusOK, ActionsResponse{
+		Actions: actions,
+	})
+}
+
 // GetStockMetrics calculates and returns comprehensive market metrics from stock ratings data
 // @Summary Get comprehensive stock market analytics and metrics
 // @Description Analyzes all stored stock ratings using parallel processing to provide comprehensive market insights including sentiment analysis, target price changes, rating distributions, top brokerages, most active stocks, and recent activity trends.
