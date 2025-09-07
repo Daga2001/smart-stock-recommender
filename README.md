@@ -342,6 +342,7 @@ The AI assistant works best with **specific, detailed questions**. Here's how to
 - [x] **AI Market Analysis** – GPT-4.1-nano integration with Wall Street analyst-level insights
 - [x] **Dynamic Recommendations** – Flexible Top N display with pagination persistence
 - [x] **Interactive AI Chat** – Real-time market discussion and analysis capabilities
+- [x] **Unit Testing** – tests for backend and frontend components
 - [ ] Implement caching for API requests  
 - [ ] Add authentication for UI users  
 - [ ] Enhance recommendation algorithm with external data sources  
@@ -354,6 +355,26 @@ The AI assistant works best with **specific, detailed questions**. Here's how to
 - Keep API keys and credentials **out of version control**.  
 - Follow clean coding practices (linting, formatting, modular code).  
 - Write unit tests for critical logic (backend + frontend).  
+
+---
+
+## 🧪 Testing
+
+### **Backend Tests**
+```bash
+cd backend
+go test ./handlers -v          # API handler tests
+go test ./models -v            # Data model tests  
+go test ./... -cover           # All tests with coverage
+```
+
+### **Frontend Tests**
+```bash
+cd frontend
+npm test                       # Run all tests
+npm run test:ui               # Interactive test UI
+npm run test:coverage         # Coverage report
+```
 
 ---
 
