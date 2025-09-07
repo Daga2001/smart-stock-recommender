@@ -5,6 +5,7 @@ import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, Di
 import { Input } from '@/components/ui/input';
 import { Bot, MessageCircle, Send, Sparkles, TrendingUp } from 'lucide-react';
 import { stockService } from '../services/stockService';
+import ReactMarkdown from 'react-markdown';
 
 interface SummaryResponse {
   summary: string;
@@ -185,7 +186,23 @@ export const AIAssistant = () => {
                           className={`flex ${messageAlignment}`}
                         >
                           <div className={`max-w-[80%] p-3 rounded-lg ${messageStyle}`}>
-                            <p className="text-sm">{message.content}</p>
+                            {message.role === 'assistant' ? (
+                              <div className="text-sm prose prose-sm max-w-none dark:prose-invert">
+                                <ReactMarkdown 
+                                  components={{
+                                    p: ({children}) => <p className="mb-2 last:mb-0">{children}</p>,
+                                    ol: ({children}) => <ol className="list-decimal list-inside space-y-1 mb-2">{children}</ol>,
+                                    ul: ({children}) => <ul className="list-disc list-inside space-y-1 mb-2">{children}</ul>,
+                                    li: ({children}) => <li className="text-sm">{children}</li>,
+                                    strong: ({children}) => <strong className="font-semibold text-primary">{children}</strong>
+                                  }}
+                                >
+                                  {message.content}
+                                </ReactMarkdown>
+                              </div>
+                            ) : (
+                              <p className="text-sm">{message.content}</p>
+                            )}
                             <p className="text-xs opacity-70 mt-1">
                               {message.timestamp.toLocaleTimeString()}
                             </p>

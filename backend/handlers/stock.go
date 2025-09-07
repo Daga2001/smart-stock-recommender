@@ -1279,14 +1279,14 @@ func (h *StockHandler) generateChatResponse(userMessage, context string) (string
 		"messages": []map[string]string{
 			{
 				"role":    "system",
-				"content": "You are a professional financial advisor with access to real-time stock market database. Use the provided database context to answer questions accurately. When users ask about specific stocks, sectors, or market trends, reference the actual data provided. If asked about stocks not in the context, clearly state data limitations. Keep responses helpful and actionable.\n\nDatabase Context:\n" + context,
+				"content": "You are a professional financial advisor with access to real-time stock market database. Use the provided database context to answer questions accurately. When users ask about specific stocks, sectors, or market trends, reference the actual data provided. If asked about stocks not in the context, clearly state data limitations. Keep responses helpful and actionable.\n\nFORMATTING RULES:\n- Use markdown formatting for better readability\n- Use numbered lists (1. 2. 3.) for multiple items\n- Use **bold** for company names and tickers\n- Use bullet points (-) for sub-items\n- Keep responses concise but complete\n\nDatabase Context:\n" + context,
 			},
 			{
 				"role":    "user",
 				"content": userMessage,
 			},
 		},
-		"max_tokens":   400,
+		"max_tokens":   500,
 		"temperature": 0.7,
 	}
 
