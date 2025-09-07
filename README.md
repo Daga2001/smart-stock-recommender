@@ -13,9 +13,10 @@ The system also provides intelligent stock recommendations to help users identif
 - 🚀 **Parallel Data Fetching** – Concurrent API calls with rate limiting and retry logic for maximum efficiency.  
 - 📝 **Interactive API Documentation** – Auto-generated Swagger docs with try-it-out functionality.  
 - 🎨 **Interactive UI** – Built with Vue 3, TypeScript, Pinia, and styled with Tailwind CSS.  
-- 🔍 **Search & Filter** – Quickly find stocks by ticker, company, or brokerage.  
+- 🔍 **Advanced Search & Filter** – RegEx-powered search across all fields in a stock information dataset (ticker, company, brokerage, action, ratings).  
 - 📊 **Sorting Options** – Sort by rating, target price, or analyst action.  
 - 🤖 **Recommendation Engine** – Analyzes stock performance trends and suggests top picks.  
+- 🔄 **Real-time Filtering** – Case-insensitive search with instant results and pagination.  
 - 🔒 **SQL Injection Protection** – Parameterized queries and input validation for security.  
 - 🧪 **Unit Testing** – Ensures stability and reliability of backend and UI logic.  
 
@@ -144,11 +145,38 @@ Fetch stock data for multiple pages with **parallel processing**.
   - **Rate limiting** to prevent API overload
   - **Database clearing** before bulk insert
 
+#### `POST /api/stocks/list` 📋
+Retrieve paginated stock ratings from database.
+- **Body:** `{"page_number": 1, "page_length": 20}`
+- **Features:** 
+  - **Paginated results** with metadata
+  - **Sorting** by creation date (newest first)
+  - **Flexible page sizes** (1-1000 records)
+
+#### `POST /api/stocks/search` 🔍
+Search stock ratings using **regular expressions** across all dataset fields.
+- **Body:** `{"page_number": 1, "page_length": 20, "search_term": "AAPL"}`
+- **Features:** 
+  - **RegEx-powered search** across ticker, company, brokerage, action, and ratings
+  - **Case-insensitive matching** for flexible queries
+  - **Paginated search results** with accurate totals
+  - **Multi-field search** - one term searches all columns
+
+#### `GET /api/stocks/metrics` 📊
+Get comprehensive market analytics and insights.
+- **Features:** 
+  - **Parallel processing** for fast metrics calculation
+  - **Target price analysis** (raised/lowered/maintained)
+  - **Rating distribution** and sentiment analysis
+  - **Top brokerages** by activity
+  - **Market trends** and statistics
+
 **Quick Test:**
 ```bash
-curl -X POST http://localhost:8081/api/stocks \
+# Search for stocks containing "zillow"
+curl -X POST http://localhost:8081/api/stocks/search \
   -H "Content-Type: application/json" \
-  -d '{"page": 1}'
+  -d '{"page_number": 1, "page_length": 20, "search_term": "zillow"}'
 ```
 
 ---

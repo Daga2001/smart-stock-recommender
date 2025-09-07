@@ -10,6 +10,8 @@ export const API_CONFIG = {
   BASE_URL: 'http://localhost:8081',
   ENDPOINTS: {
     STOCKS_LIST: '/api/stocks/list',
+    STOCKS_SEARCH: '/api/stocks/search',
+    STOCKS_ACTIONS: '/api/stocks/actions',
     STOCKS_METRICS: '/api/stocks/metrics',
     STOCKS_BULK: '/api/stocks/bulk',
     STOCKS_SINGLE: '/api/stocks'
@@ -50,4 +52,10 @@ export interface StockListResponse {
 export interface PaginationRequest {
   page_number: number;
   page_length: number;
+}
+
+export interface SearchRequest {
+  page_number: number;
+  page_length: number;
+  search_term: string;
 }

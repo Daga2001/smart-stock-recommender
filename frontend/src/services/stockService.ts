@@ -1,4 +1,4 @@
-import { API_CONFIG, StockListResponse, PaginationRequest } from '../config/api';
+import { API_CONFIG, StockListResponse, PaginationRequest, SearchRequest } from '../config/api';
 
 /**
  * Service class to interact with the stock-related API endpoints.
@@ -24,7 +24,40 @@ class StockService {
     return response.json();
   }
 
-  // New method to fetch stock metrics
+  // Method to search stock ratings
+  async searchStockRatings(searchParams: SearchRequest): Promise<StockListResponse> {
+    const response = await fetch(`${this.baseUrl}${API_CONFIG.ENDPOINTS.STOCKS_SEARCH}`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify(searchParams),
+    });
+
+    if (!response.ok) {
+      throw new Error(`Failed to search stock ratings: ${response.statusText}`);
+    }
+
+    return response.json();
+  }
+
+  // Method to fetch available stock actions
+  async getStockActions(): Promise<{actions: string[]}> {
+    const response = await fetch(`${this.baseUrl}${API_CONFIG.ENDPOINTS.STOCKS_ACTIONS}`, {
+      method: 'GET',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+    });
+
+    if (!response.ok) {
+      throw new Error(`Failed to fetch stock actions: ${response.statusText}`);
+    }
+
+    return response.json();
+  }
+
+  // Method to fetch stock metrics
   async getStockMetrics() {
     const response = await fetch(`${this.baseUrl}${API_CONFIG.ENDPOINTS.STOCKS_METRICS}`, {
       method: 'GET',

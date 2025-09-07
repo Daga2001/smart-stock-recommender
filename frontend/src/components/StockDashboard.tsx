@@ -17,7 +17,7 @@ interface StockDashboardProps {
   loading: boolean;
   pageLength?: number;
   onPageLengthChange?: (length: number) => void;
-  onRefresh?: () => void;
+  onRefresh?: (search?: string) => void;
   totalPages?: number;
   totalRecords?: number;
 }
@@ -44,23 +44,21 @@ export const StockDashboard = ({
     search: '',
     action: 'all'
   });
+  
+  const [appliedSearch, setAppliedSearch] = useState<string>('');
 
   const filteredStocks = useMemo(() => {
     return stocks.filter(stock => {
-      const searchLower = filters.search.toLowerCase();
-      const matchesSearch = !filters.search || 
-        (stock.ticker && stock.ticker.toLowerCase().includes(searchLower)) ||
-        (stock.company && stock.company.toLowerCase().includes(searchLower)) ||
-        (stock.brokerage && stock.brokerage.toLowerCase().includes(searchLower)) ||
-        (stock.action && stock.action.toLowerCase().includes(searchLower)) ||
-        (stock.rating_from && stock.rating_from.toLowerCase().includes(searchLower)) ||
-        (stock.rating_to && stock.rating_to.toLowerCase().includes(searchLower));
-      
       const matchesAction = filters.action === 'all' || !filters.action || stock.action === filters.action;
-      
-      return matchesSearch && matchesAction;
+      return matchesAction;
     });
-  }, [stocks, filters]);
+  }, [stocks, filters.action]);
+
+  // Handle action filter changes
+  const handleActionFilterChange = (newFilters: StockFilters) => {
+    setFilters(newFilters);
+    // Action filter is applied client-side, no need to refresh data
+  };
 
   // Calculate statistics
   const stats = useMemo(() => {
@@ -232,7 +230,21 @@ export const StockDashboard = ({
 
         {/* Interactive Filters */}
         <div className="mb-8 animate-slide-up" style={{ animationDelay: '0.5s' }}>
-          <FiltersComponent filters={filters} onFiltersChange={setFilters} />
+          <FiltersComponent 
+            filters={filters} 
+            onFiltersChange={handleActionFilterChange}
+            onApplyFilter={() => {
+              const searchTerm = filters.search.trim();
+              setAppliedSearch(searchTerm);
+              // Immediately trigger the refresh with the search term
+              if (searchTerm) {
+                onRefresh?.(searchTerm);
+              } else {
+                onRefresh?.('');
+              }
+            }}
+            loading={loading}
+          />
         </div>
 
         {/* Professional Stock Analysis Table */}

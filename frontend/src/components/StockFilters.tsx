@@ -3,6 +3,8 @@ import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Search, Filter, Sparkles, RefreshCw } from 'lucide-react';
 import { Button } from '@/components/ui/button';
+import { useState, useEffect } from 'react';
+import { stockService } from '../services/stockService';
 
 /**
  * Props for the StockFilters component.
@@ -11,6 +13,8 @@ import { Button } from '@/components/ui/button';
 interface StockFiltersProps {
   filters: FiltersType;
   onFiltersChange: (filters: FiltersType) => void;
+  onApplyFilter: () => void;
+  loading?: boolean;
 }
 
 /**
@@ -20,7 +24,21 @@ interface StockFiltersProps {
  * @returns 
  */
 
-export const StockFilters = ({ filters, onFiltersChange }: StockFiltersProps) => {
+export const StockFilters = ({ filters, onFiltersChange, onApplyFilter, loading = false }: StockFiltersProps) => {
+  const [availableActions, setAvailableActions] = useState<string[]>([]);
+
+  useEffect(() => {
+    const loadActions = async () => {
+      try {
+        const response = await stockService.getStockActions();
+        setAvailableActions(response.actions);
+      } catch (error) {
+        console.error('Failed to load actions:', error);
+      }
+    };
+    loadActions();
+  }, []);
+
   const clearFilters = () => {
     onFiltersChange({ search: '', action: 'all' });
   };
@@ -40,7 +58,12 @@ export const StockFilters = ({ filters, onFiltersChange }: StockFiltersProps) =>
         
         {(filters.search || filters.action !== 'all') && (
           <Button 
-            onClick={clearFilters}
+            type="button"
+            onClick={(e) => {
+              e.preventDefault();
+              e.stopPropagation();
+              clearFilters();
+            }}
             variant="outline" 
             size="sm"
             className="hover:bg-destructive/10 hover:border-destructive/50 hover:text-destructive transition-all duration-200"
@@ -51,13 +74,24 @@ export const StockFilters = ({ filters, onFiltersChange }: StockFiltersProps) =>
         )}
       </div>
 
-      <div className="flex flex-col sm:flex-row gap-4">
+      <form onSubmit={(e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        onApplyFilter();
+      }}>
+        <div className="flex flex-col sm:flex-row gap-4">
         <div className="relative flex-1">
           <Search className="absolute left-4 top-1/2 transform -translate-y-1/2 text-muted-foreground h-5 w-5 z-10" />
           <Input
             placeholder="Search stocks, companies, or brokerages..."
             value={filters.search}
             onChange={(e) => onFiltersChange({ ...filters, search: e.target.value })}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter') {
+                e.preventDefault();
+                onApplyFilter();
+              }
+            }}
             className="pl-12 h-12 bg-background/50 border border-border/50 focus:border-primary/50 focus:bg-background transition-all duration-200 text-base"
           />
           {filters.search && (
@@ -88,34 +122,56 @@ export const StockFilters = ({ filters, onFiltersChange }: StockFiltersProps) =>
                   All Actions
                 </span>
               </SelectItem>
-              <SelectItem value="initiated by" className="focus:bg-success/10 focus:text-success">
-                <span className="flex items-center gap-2">
-                  <div className="w-2 h-2 bg-success rounded-full" />
-                  Initiated
-                </span>
-              </SelectItem>
-              <SelectItem value="target raised by" className="focus:bg-success/10 focus:text-success">
-                <span className="flex items-center gap-2">
-                  <div className="w-2 h-2 bg-success rounded-full" />
-                  Target Raised
-                </span>
-              </SelectItem>
-              <SelectItem value="target lowered by" className="focus:bg-destructive/10 focus:text-destructive">
-                <span className="flex items-center gap-2">
-                  <div className="w-2 h-2 bg-destructive rounded-full" />
-                  Target Lowered
-                </span>
-              </SelectItem>
-              <SelectItem value="reiterated by" className="focus:bg-neutral/10 focus:text-neutral-foreground">
-                <span className="flex items-center gap-2">
-                  <div className="w-2 h-2 bg-neutral rounded-full" />
-                  Reiterated
-                </span>
-              </SelectItem>
+              {availableActions.map((action) => {
+                const getActionColor = (actionType: string) => {
+                  const lowerAction = actionType.toLowerCase();
+                  if (lowerAction.includes('raised') || lowerAction.includes('upgrade') || lowerAction.includes('initiated')) {
+                    return 'success'; // Green for positive actions
+                  } else if (lowerAction.includes('lowered') || lowerAction.includes('downgrade')) {
+                    return 'destructive'; // Red for negative actions
+                  } else {
+                    return 'neutral'; // Gray for neutral actions
+                  }
+                };
+                
+                const colorClass = getActionColor(action);
+                return (
+                  <SelectItem key={action} value={action} className={`focus:bg-${colorClass}/10 focus:text-${colorClass}`}>
+                    <span className="flex items-center gap-2">
+                      <div className={`w-2 h-2 bg-${colorClass} rounded-full`} />
+                      {action.charAt(0).toUpperCase() + action.slice(1)}
+                    </span>
+                  </SelectItem>
+                );
+              })}
             </SelectContent>
           </Select>
         </div>
-      </div>
+        
+        <Button 
+          type="button"
+          onClick={(e) => {
+            e.preventDefault();
+            e.stopPropagation();
+            onApplyFilter();
+          }}
+          disabled={loading}
+          className="h-12 px-6 bg-primary hover:bg-primary/90 text-primary-foreground font-medium transition-all duration-200 hover:shadow-premium disabled:opacity-50"
+        >
+          {loading ? (
+            <>
+              <RefreshCw className="h-4 w-4 mr-2 animate-spin" />
+              Searching...
+            </>
+          ) : (
+            <>
+              <Search className="h-4 w-4 mr-2" />
+              Apply Filter
+            </>
+          )}
+        </Button>
+        </div>
+      </form>
 
       {/* Filter Status */}
       {(filters.search || filters.action !== 'all') && (
