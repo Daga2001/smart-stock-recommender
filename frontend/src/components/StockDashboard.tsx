@@ -4,6 +4,7 @@ import { Stock, StockFilters } from '../types/stock';
 import { StockTable } from './StockTable';
 import { StockFilters as FiltersComponent } from './StockFilters';
 import { StockRecommendations } from './StockRecommendations';
+import { AIAssistant } from './AIAssistant';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { TrendingUp, TrendingDown, BarChart3, Users, Activity, DollarSign, Target, Star } from 'lucide-react';
 
@@ -18,7 +19,7 @@ interface StockDashboardProps {
   loading: boolean;
   pageLength?: number;
   onPageLengthChange?: (length: number) => void;
-  onRefresh?: (search?: string) => void;
+  onRefresh?: (search?: string, resetToPageOne?: boolean) => void;
   onPageInputChange?: (page: number) => void;
   currentPageNumber?: number;
   totalPages?: number;
@@ -243,13 +244,18 @@ export const StockDashboard = ({
           </Card>
         </div>
 
-        {/* Premium Recommendations Section */}
-        <div className="mb-12 animate-slide-up" style={{ animationDelay: '0.4s' }}>
-          <StockRecommendations stocks={stocks} />
+        {/* AI Assistant Section */}
+        {/* <div className="mb-12 animate-slide-up" style={{ animationDelay: '0.4s' }}>
+          <AIAssistant />
+        </div> */}
+
+        {/* Top 3 AI Recommendations Section */}
+        <div className="mb-12 animate-slide-up" style={{ animationDelay: '0.5s' }}>
+          <StockRecommendations />
         </div>
 
         {/* Interactive Filters */}
-        <div className="mb-8 animate-slide-up" style={{ animationDelay: '0.5s' }}>
+        <div className="mb-8 animate-slide-up" style={{ animationDelay: '0.6s' }}>
           <FiltersComponent 
             filters={filters} 
             onFiltersChange={handleActionFilterChange}
@@ -258,26 +264,26 @@ export const StockDashboard = ({
               setAppliedSearch(searchTerm);
               // Save current filters to localStorage
               localStorage.setItem('stockFilters', JSON.stringify(filters));
-              // Immediately trigger the refresh with the search term
+              // Immediately trigger the refresh with the search term and reset to page 1
               if (searchTerm) {
-                onRefresh?.(searchTerm);
+                onRefresh?.(searchTerm, true); // true = reset to page 1
               } else {
-                onRefresh?.('');
+                onRefresh?.('', true); // true = reset to page 1
               }
             }}
             onClearAll={() => {
               setAppliedSearch('');
               // Clear localStorage
               localStorage.removeItem('stockFilters');
-              // Refresh with empty search to show all data
-              onRefresh?.('');
+              // Refresh with empty search to show all data and reset to page 1
+              onRefresh?.('', true); // true = reset to page 1
             }}
             loading={loading}
           />
         </div>
 
         {/* Professional Stock Analysis Table */}
-        <div className="space-y-6 animate-slide-up" style={{ animationDelay: '0.6s' }}>
+        <div className="space-y-6 animate-slide-up" style={{ animationDelay: '0.7s' }}>
           <div className="flex items-center justify-between">
             <div>
               <h2 className="text-2xl font-semibold flex items-center gap-3">
@@ -308,7 +314,7 @@ export const StockDashboard = ({
                     type="number"
                     min="1"
                     max={totalPages}
-                    value={currentPageNumber}
+                    value={currentPage}
                     onChange={(e) => onPageInputChange?.(Math.max(1, Math.min(totalPages, parseInt(e.target.value) || 1)))}
                     className="w-20 px-3 py-2 glass-card border border-border/50 rounded-lg text-sm font-mono font-semibold text-center focus:ring-2 focus:ring-primary/50 focus:border-primary transition-all duration-200 hover:shadow-premium"
                   />
@@ -331,14 +337,20 @@ export const StockDashboard = ({
                 
                 <div className="flex items-center gap-3">
                   <button
-                    onClick={() => onRefresh?.(appliedSearch)}
+                    onClick={() => {
+                      if (!appliedSearch) {
+                        onRefresh?.();
+                      } else {
+                        onRefresh?.(appliedSearch);
+                      }
+                    }}
                     disabled={loading}
                     className="px-4 py-2 glass-card border border-border/50 rounded-lg text-sm font-medium bg-primary/10 hover:bg-primary/20 text-primary focus:ring-2 focus:ring-primary/50 focus:border-primary transition-all duration-200 hover:shadow-premium disabled:opacity-50 disabled:cursor-not-allowed"
                   >
                     {loading ? 'Loading...' : 'Refresh'}
                   </button>
                   <div className="text-xs text-muted-foreground">
-                    💡 Click refresh after changing page number
+                    💡 Click refresh after changing page number to navigate through the table
                   </div>
                 </div>
               </div>

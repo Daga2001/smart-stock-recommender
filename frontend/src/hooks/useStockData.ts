@@ -26,12 +26,18 @@ export const useStockData = (initialPageNumber = 1, initialPageLength = 20) => {
   };
 
   const [pageNumber, setPageNumber] = useState(getInitialPageNumber);
+
+  // Update page number and save to localStorage
+  const updatePageNumber = (newPage: number) => {
+    setPageNumber(newPage);
+    localStorage.setItem('currentPageNumber', newPage.toString());
+  };
   const [pageLength, setPageLength] = useState(initialPageLength);
   const [searchFilter, setSearchFilter] = useState<string>('');
   const [isSearchMode, setIsSearchMode] = useState<boolean>(false);
 
   // Function to fetch stock data from the backend API
-  const fetchStockData = async (forceSearchTerm?: string, forceSearchMode?: boolean) => {
+  const fetchStockData = async (forceSearchTerm?: string, forceSearchMode?: boolean, forcePageNumber?: number) => {
     setLoading(true);
     setError(null);
     
@@ -39,8 +45,9 @@ export const useStockData = (initialPageNumber = 1, initialPageLength = 20) => {
       let response;
       const currentSearchTerm = forceSearchTerm !== undefined ? forceSearchTerm : searchFilter;
       const currentSearchMode = forceSearchMode !== undefined ? forceSearchMode : isSearchMode;
+      const currentPageNumber = forcePageNumber !== undefined ? forcePageNumber : pageNumber;
       
-      console.log('🔄 Fetching page', pageNumber, 'with search:', currentSearchTerm, 'mode:', currentSearchMode);
+      console.log('🔄 Fetching page', currentPageNumber, 'with search:', currentSearchTerm, 'mode:', currentSearchMode);
       
       if (currentSearchMode && currentSearchTerm) {
         // Use search endpoint
@@ -48,7 +55,7 @@ export const useStockData = (initialPageNumber = 1, initialPageLength = 20) => {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
-            page_number: pageNumber,
+            page_number: currentPageNumber,
             page_length: pageLength,
             search_term: currentSearchTerm,
           }),
@@ -62,13 +69,17 @@ export const useStockData = (initialPageNumber = 1, initialPageLength = 20) => {
       } else {
         // Use regular list endpoint
         response = await stockService.getStockRatings({
-          page_number: pageNumber,
+          page_number: currentPageNumber,
           page_length: pageLength,
         });
       }
       
       setStockData(response.data || []);
       setPagination(response.pagination);
+      // Update page number to match API response
+      if (response.pagination && response.pagination.page_number) {
+        updatePageNumber(response.pagination.page_number);
+      }
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to fetch stock data');
     } finally {
@@ -95,8 +106,7 @@ export const useStockData = (initialPageNumber = 1, initialPageLength = 20) => {
   };
 
   const handlePageInputChange = (newPageNumber: number) => {
-    setPageNumber(newPageNumber);
-    localStorage.setItem('currentPageNumber', newPageNumber.toString());
+    updatePageNumber(newPageNumber);
   };
 
   const handlePageLengthChange = (newPageLength: number) => {
@@ -104,20 +114,22 @@ export const useStockData = (initialPageNumber = 1, initialPageLength = 20) => {
     setPageLength(newPageLength);
   };
 
-  const handleRefresh = (search?: string) => {
+  const handleRefresh = (search?: string, resetToPageOne?: boolean) => {
     if (search !== undefined) {
       const newSearchMode = search.length > 0;
       setSearchFilter(search);
       setIsSearchMode(newSearchMode);
-      if (search === '') {
-        // Only reset to page 1 when clearing search
-        setPageNumber(1);
-        localStorage.setItem('currentPageNumber', '1');
+      if (resetToPageOne || search === '') {
+        // Reset to page 1 for new search or clear
+        updatePageNumber(1);
+        fetchStockData(search, newSearchMode, 1);
+      } else {
+        // Use current page number for search
+        fetchStockData(search, newSearchMode, pageNumber);
       }
-      // Immediately fetch with the new search parameters
-      fetchStockData(search, newSearchMode);
     } else {
-      fetchStockData();
+      // Use current page number for refresh
+      fetchStockData(undefined, undefined, pageNumber);
     }
   };
 

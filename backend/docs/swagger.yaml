@@ -436,7 +436,7 @@ paths:
     post:
       consumes:
       - application/json
-      description: Interactive chat with GPT-3.5-turbo for personalized stock analysis,
+      description: Interactive chat with gpt-4.1-nano for personalized stock analysis,
         market insights, and investment advice based on current data.
       parameters:
       - description: Chat message from user

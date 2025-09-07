@@ -1,11 +1,13 @@
-import { Stock } from '../types/stock';
+import { useState, useEffect } from 'react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { StockBadge } from './StockBadge';
-import { TrendingUp, Award, Target, Crown, Zap, Star, Medal, Trophy } from 'lucide-react';
+import { TrendingUp, Award, Target, Crown, Zap, Star, Medal, Trophy, Bot, RefreshCw } from 'lucide-react';
+import { stockService, type StockRecommendation } from '../services/stockService';
+import { Button } from '@/components/ui/button';
 
 // Props for the StockRecommendations component.
 interface StockRecommendationsProps {
-  stocks: Stock[];
+  // No props needed - fetches data from API
 }
 
 /**
@@ -14,44 +16,31 @@ interface StockRecommendationsProps {
  * @returns 
  */
 
-export const StockRecommendations = ({ stocks }: StockRecommendationsProps) => {
-  // Calculate recommendations based on target price increases and buy ratings
-  const recommendations = stocks
-    .filter(stock => {
-      const targetTo = parseFloat(stock.target_to.replace('$', ''));
-      const targetFrom = parseFloat(stock.target_from.replace('$', ''));
-      const hasTargetIncrease = targetTo > targetFrom;
-      const hasBuyRating = stock.rating_to.toLowerCase().includes('buy') || 
-                          stock.rating_to.toLowerCase().includes('outperform');
-      return hasTargetIncrease || hasBuyRating;
-    })
-    .sort((a, b) => {
-      // Sort by target price increase percentage
-      const aTargetTo = parseFloat(a.target_to.replace('$', ''));
-      const aTargetFrom = parseFloat(a.target_from.replace('$', ''));
-      const bTargetTo = parseFloat(b.target_to.replace('$', ''));
-      const bTargetFrom = parseFloat(b.target_from.replace('$', ''));
-      const aIncrease = ((aTargetTo - aTargetFrom) / aTargetFrom) * 100;
-      const bIncrease = ((bTargetTo - bTargetFrom) / bTargetFrom) * 100;
-      return bIncrease - aIncrease;
-    })
-    .slice(0, 3);
+export const StockRecommendations = ({}: StockRecommendationsProps) => {
+  const [recommendations, setRecommendations] = useState<StockRecommendation[]>([]);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
-  const getRecommendationReason = (stock: Stock) => {
-    const targetTo = parseFloat(stock.target_to.replace('$', ''));
-    const targetFrom = parseFloat(stock.target_from.replace('$', ''));
-    const targetIncrease = ((targetTo - targetFrom) / targetFrom) * 100;
-    const hasBuyRating = stock.rating_to.toLowerCase().includes('buy');
-    const hasOutperform = stock.rating_to.toLowerCase().includes('outperform');
-    
-    if (targetIncrease > 0) {
-      return `Price target boosted ${targetIncrease.toFixed(1)}% - Strong upside potential`;
-    } else if (hasBuyRating) {
-      return 'Analyst confidence with sustained BUY rating';
-    } else if (hasOutperform) {
-      return 'Outperform rating indicates above-market returns';
+  const loadRecommendations = async () => {
+    setLoading(true);
+    setError(null);
+    try {
+      const response = await stockService.getStockRecommendations();
+      setRecommendations(response.recommendations.slice(0, 3)); // Top 3 only
+    } catch (err) {
+      setError('Failed to load recommendations');
+      console.error('Failed to load recommendations:', err);
+    } finally {
+      setLoading(false);
     }
-    return 'Maintained analyst confidence signals stability';
+  };
+
+  useEffect(() => {
+    loadRecommendations();
+  }, []);
+
+  const getRecommendationReason = (rec: StockRecommendation) => {
+    return rec.reason || 'AI-powered analysis indicates strong potential';
   };
 
   const getRankIcon = (index: number) => {
@@ -81,31 +70,68 @@ export const StockRecommendations = ({ stocks }: StockRecommendationsProps) => {
           </div>
           <div>
             <h2 className="text-2xl font-bold flex items-center gap-2">
-              Premium Recommendations
-              <Zap className="h-5 w-5 text-yellow-400 animate-pulse" />
+              Top 3 AI Recommendations
+              <Bot className="h-5 w-5 text-primary animate-pulse" />
             </h2>
-            <p className="text-muted-foreground">AI-powered analysis of top-performing opportunities</p>
+            <p className="text-muted-foreground text-sm leading-relaxed">
+              Algorithm considers: <span className="font-semibold">Target price changes</span>, <span className="font-semibold">Rating improvements</span> (Buy, Outperform), and <span className="font-semibold">Analyst sentiment</span>
+            </p>
           </div>
         </div>
         <div className="text-right">
-          <div className="text-sm text-muted-foreground">
-            Confidence Score: <span className="text-primary font-semibold">94.2%</span>
-          </div>
+          <Button 
+            onClick={loadRecommendations} 
+            variant="outline" 
+            size="sm"
+            disabled={loading}
+            className="mb-2"
+          >
+            <RefreshCw className={`h-4 w-4 mr-2 ${loading ? 'animate-spin' : ''}`} />
+            {loading ? 'Loading...' : 'Refresh'}
+          </Button>
           <div className="text-xs text-muted-foreground">
-            Updated {new Date().toLocaleTimeString()}
+            AI-powered analysis
           </div>
         </div>
       </div>
       
-      <div className="grid gap-6 md:grid-cols-3">
-        {recommendations.map((stock, index) => {
-          const targetTo = parseFloat(stock.target_to.replace('$', ''));
-          const targetFrom = parseFloat(stock.target_from.replace('$', ''));
-          const targetIncrease = ((targetTo - targetFrom) / targetFrom) * 100;
-          
+      {(() => {
+        if (loading) {
           return (
+            <div className="flex items-center justify-center py-12">
+              <RefreshCw className="h-8 w-8 animate-spin text-primary" />
+              <span className="ml-2 text-muted-foreground">Loading AI recommendations...</span>
+            </div>
+          );
+        }
+        
+        if (error) {
+          return (
+            <div className="text-center py-12">
+              <p className="text-destructive mb-4">{error}</p>
+              <Button onClick={loadRecommendations} variant="outline">
+                <RefreshCw className="h-4 w-4 mr-2" />
+                Try Again
+              </Button>
+            </div>
+          );
+        }
+        
+        if (recommendations.length === 0) {
+          return (
+            <div className="text-center py-12 text-muted-foreground">
+              <Bot className="h-12 w-12 mx-auto mb-4 opacity-50" />
+              <p>No recommendations available at this time.</p>
+            </div>
+          );
+        }
+        
+        return (
+          <div className="grid gap-6 md:grid-cols-3">
+          {recommendations.map((rec, index) => {
+            return (
             <Card 
-              key={stock.ticker} 
+              key={rec.ticker} 
               className={`
                 relative overflow-hidden glass-card border-2 
                 bg-gradient-to-br ${getRankBg(index)}
@@ -127,14 +153,17 @@ export const StockRecommendations = ({ stocks }: StockRecommendationsProps) => {
                 <div className="flex items-center justify-between">
                   <div className="space-y-1">
                     <CardTitle className="text-2xl font-mono font-bold text-primary group-hover:text-primary/80 transition-colors">
-                      {stock.ticker}
+                      {rec.ticker}
                     </CardTitle>
                     <div className="flex items-center gap-2">
                       <div className="text-xs bg-primary/20 text-primary px-2 py-1 rounded-full font-semibold">
                         #{index + 1} PICK
                       </div>
-                      {targetIncrease > 10 && (
-                        <div className="text-xs bg-success/20 text-success px-2 py-1 rounded-full font-semibold animate-pulse">
+                      <div className="text-xs bg-success/20 text-success px-2 py-1 rounded-full font-semibold">
+                        {rec.recommendation}
+                      </div>
+                      {rec.price_change > 10 && (
+                        <div className="text-xs bg-destructive/20 text-destructive px-2 py-1 rounded-full font-semibold animate-pulse">
                           HOT 🔥
                         </div>
                       )}
@@ -142,16 +171,16 @@ export const StockRecommendations = ({ stocks }: StockRecommendationsProps) => {
                   </div>
                 </div>
                 <CardDescription className="text-sm font-medium text-foreground/80 group-hover:text-foreground transition-colors">
-                  {stock.company}
+                  {rec.company}
                 </CardDescription>
               </CardHeader>
               
               <CardContent className="space-y-4 relative z-10">
                 <div className="flex items-center justify-between">
-                  <StockBadge rating={stock.rating_to} size="lg" />
+                  <StockBadge rating={rec.current_rating} size="lg" />
                   <div className="text-right">
-                    <div className="text-xs text-muted-foreground font-medium">{stock.brokerage}</div>
-                    <div className="text-xs text-muted-foreground">{stock.action}</div>
+                    <div className="text-xs text-muted-foreground font-medium">{rec.brokerage}</div>
+                    <div className="text-xs font-semibold text-primary">Score: {rec.score.toFixed(1)}/10</div>
                   </div>
                 </div>
                 
@@ -162,19 +191,15 @@ export const StockRecommendations = ({ stocks }: StockRecommendationsProps) => {
                   </div>
                   <div className="flex items-center justify-between">
                     <div className="flex items-center gap-3">
-                      <span className="font-mono text-sm text-muted-foreground line-through">
-                        {stock.target_from}
-                      </span>
-                      <span className="text-muted-foreground">→</span>
                       <span className="font-mono font-bold text-xl text-primary">
-                        {stock.target_to}
+                        {rec.target_price}
                       </span>
                     </div>
-                    {targetIncrease > 0 && (
+                    {rec.price_change > 0 && (
                       <div className="flex items-center gap-1">
                         <TrendingUp className="h-4 w-4 text-success" />
                         <span className="text-success font-bold text-lg">
-                          +{targetIncrease.toFixed(1)}%
+                          +{rec.price_change.toFixed(1)}%
                         </span>
                       </div>
                     )}
@@ -183,45 +208,24 @@ export const StockRecommendations = ({ stocks }: StockRecommendationsProps) => {
                   {/* Progress Bar */}
                   <div className="w-full bg-muted/30 rounded-full h-2 overflow-hidden">
                     <div 
-                      className="h-full bg-gradient-to-r from-primary to-success rounded-full transition-all duration-1000 ease-out animate-glow"
-                      style={{ width: `${Math.min(100, Math.max(10, targetIncrease * 2))}%` }}
+                      className="h-full bg-gradient-to-r from-primary to-success transition-all duration-1000 ease-out"
+                      style={{ width: `${Math.min(rec.score * 10, 100)}%` }}
                     />
                   </div>
                 </div>
                 
-                <div className="text-xs text-muted-foreground border-t border-border/30 pt-3 italic">
-                  💡 {getRecommendationReason(stock)}
-                </div>
-                
-                {/* Action Button */}
-                <div className="pt-2">
-                  <div className="w-full bg-primary/10 hover:bg-primary/20 text-primary text-center py-2 rounded-lg font-semibold text-sm transition-all duration-200 cursor-pointer group-hover:bg-primary group-hover:text-primary-foreground">
-                    View Analysis →
-                  </div>
+                <div className="pt-2 border-t border-border/30">
+                  <p className="text-xs text-muted-foreground leading-relaxed">
+                    <span className="font-semibold text-foreground">Why recommended:</span> {getRecommendationReason(rec)}
+                  </p>
                 </div>
               </CardContent>
             </Card>
-          );
-        })}
-      </div>
-
-      {recommendations.length === 0 && (
-        <Card className="glass-card animate-fade-in">
-          <CardContent className="flex items-center justify-center py-12">
-            <div className="text-center space-y-4">
-              <div className="p-4 rounded-full bg-muted/20 w-fit mx-auto">
-                <TrendingUp className="h-12 w-12 text-muted-foreground" />
-              </div>
-              <div>
-                <h3 className="font-semibold text-lg mb-2">No Strong Signals Available</h3>
-                <p className="text-muted-foreground">
-                  Our AI is analyzing market conditions. Premium recommendations will appear when optimal opportunities are identified.
-                </p>
-              </div>
-            </div>
-          </CardContent>
-        </Card>
-      )}
+            );
+          })}
+          </div>
+        );
+      })()}
     </div>
   );
 };

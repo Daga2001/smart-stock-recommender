@@ -135,7 +135,7 @@ const docTemplate = `{
         },
         "/stocks/chat": {
             "post": {
-                "description": "Interactive chat with GPT-3.5-turbo for personalized stock analysis, market insights, and investment advice based on current data.",
+                "description": "Interactive chat with gpt-4.1-nano for personalized stock analysis, market insights, and investment advice based on current data.",
                 "consumes": [
                     "application/json"
                 ],

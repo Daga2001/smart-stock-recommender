@@ -1,4 +1,4 @@
-import { API_CONFIG, StockListResponse, PaginationRequest, SearchRequest } from '../config/api';
+import { API_CONFIG, StockListResponse, PaginationRequest, SearchRequest, RecommendationsResponse } from '../config/api';
 
 /**
  * Service class to interact with the stock-related API endpoints.
@@ -58,6 +58,21 @@ class StockService {
   }
 
   // Method to fetch stock metrics
+  async getStockRecommendations(): Promise<RecommendationsResponse> {
+    const response = await fetch(`${this.baseUrl}${API_CONFIG.ENDPOINTS.STOCKS_RECOMMENDATIONS}`, {
+      method: 'GET',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+    });
+
+    if (!response.ok) {
+      throw new Error(`Failed to fetch stock recommendations: ${response.statusText}`);
+    }
+
+    return response.json();
+  }
+
   async getStockMetrics() {
     const response = await fetch(`${this.baseUrl}${API_CONFIG.ENDPOINTS.STOCKS_METRICS}`, {
       method: 'GET',
@@ -75,3 +90,6 @@ class StockService {
 }
 
 export const stockService = new StockService();
+
+// Export types for use in components
+export type { RecommendationsResponse, StockRecommendation } from '../config/api';

@@ -12,6 +12,7 @@ export const API_CONFIG = {
     STOCKS_LIST: '/api/stocks/list',
     STOCKS_SEARCH: '/api/stocks/search',
     STOCKS_ACTIONS: '/api/stocks/actions',
+    STOCKS_RECOMMENDATIONS: '/api/stocks/recommendations',
     STOCKS_METRICS: '/api/stocks/metrics',
     STOCKS_BULK: '/api/stocks/bulk',
     STOCKS_SINGLE: '/api/stocks'
@@ -58,4 +59,23 @@ export interface SearchRequest {
   page_number: number;
   page_length: number;
   search_term: string;
+}
+
+export interface StockRecommendation {
+  ticker: string;
+  company: string;
+  current_rating: string;
+  target_price: string;
+  score: number;
+  recommendation: string;
+  reason: string;
+  brokerage: string;
+  price_change: number;
+  rating_improvement: boolean;
+}
+
+export interface RecommendationsResponse {
+  recommendations: StockRecommendation[];
+  generated_at: string;
+  total_analyzed: number;
 }

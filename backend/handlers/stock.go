@@ -743,9 +743,23 @@ func (h *StockHandler) GetStockRecommendations(c *gin.Context) {
 	})
 }
 
-// analyzeStocksForRecommendations implements the recommendation algorithm
+// analyzeStocksForRecommendations implements the AI recommendation algorithm
+// 
+// ALGORITHM OVERVIEW:
+// 1. Groups all stocks by ticker symbol to get latest data per company
+// 2. Calculates weighted score (0-10) for each stock using multiple criteria
+// 3. Filters stocks with score >= 5.0 (minimum recommendation threshold)
+// 4. Sorts by score (highest first) and returns top 10 recommendations
+// 
+// WHY TOP 3 IS VARIABLE:
+// The "top 3" changes because scores are recalculated every time based on:
+// - New analyst reports added to database
+// - Updated target prices and ratings
+// - Time decay (recent activity gets bonus points)
+// - Competitive ranking (a stock with 8.5 score today might drop to 7.8 tomorrow)
 func analyzeStocksForRecommendations(stocks []stockData) []StockRecommendation {
-	// Group stocks by ticker to analyze latest data
+	// STEP 1: Group stocks by ticker to get latest data per company
+	// This ensures we analyze the most recent analyst opinion for each stock
 	stockMap := make(map[string][]stockData)
 	for _, stock := range stocks {
 		stockMap[stock.Ticker] = append(stockMap[stock.Ticker], stock)
@@ -753,7 +767,7 @@ func analyzeStocksForRecommendations(stocks []stockData) []StockRecommendation {
 
 	var recommendations []StockRecommendation
 
-	// for each ticker, analyze the most recent entry
+	// STEP 2: Analyze each stock and calculate recommendation score
 	for ticker, stockList := range stockMap {
 		if len(stockList) == 0 {
 			continue
@@ -767,10 +781,11 @@ func analyzeStocksForRecommendations(stocks []stockData) []StockRecommendation {
 			}
 		}
 
-		// Calculate recommendation score
+		// STEP 3: Calculate AI recommendation score (0-10 scale)
+		// Uses weighted algorithm considering multiple factors
 		score := calculateStockScore(latestStock, stockList)
-		if score < 5.0 { // Only recommend stocks with score >= 5.0
-			continue
+		if score < 5.0 { // QUALITY FILTER: Only recommend stocks with score >= 5.0
+			continue // Skip low-quality recommendations
 		}
 
 		// Parse target prices for analysis
@@ -799,70 +814,100 @@ func analyzeStocksForRecommendations(stocks []stockData) []StockRecommendation {
 		})
 	}
 
-	// Sort by score (highest first) and return top 10
+	// STEP 4: SORTING - This is where the magic happens!
+	// Sort by score in DESCENDING order (highest scores first)
+	// This determines the final ranking: #1, #2, #3, etc.
 	sort.Slice(recommendations, func(i, j int) bool {
-		return recommendations[i].Score > recommendations[j].Score
+		return recommendations[i].Score > recommendations[j].Score // Higher score = better rank
 	})
 
-	// Limit to top 10 recommendations
+	// STEP 5: Return top 10 recommendations (frontend takes first 3)
+	// Why top 10? Provides buffer for frontend to choose top 3
 	if len(recommendations) > 10 {
-		recommendations = recommendations[:10]
+		recommendations = recommendations[:10] // Slice to get first 10 elements
 	}
 
-	return recommendations
+	return recommendations // Sorted list: [highest_score, second_highest, third_highest, ...]
 }
 
-// calculateStockScore implements the scoring algorithm
+// calculateStockScore implements the weighted scoring algorithm
+// 
+// SCORING SYSTEM (0-10 scale):
+// Base Score: 5.0 (neutral starting point)
+// 
+// WEIGHT DISTRIBUTION:
+// 🎯 Target Price Changes: 40% (most important)
+// ⭐ Rating Analysis: 30% (second most important) 
+// 📊 Action Analysis: 20% (third most important)
+// ⏰ Recent Activity: 10% (timing bonus)
+// 
+// SCORE RANGES:
+// 8.5-10.0 = Strong Buy (top tier recommendations)
+// 7.0-8.4  = Buy (good recommendations)
+// 6.0-6.9  = Moderate Buy (decent opportunities)
+// 5.0-5.9  = Hold (minimum threshold)
+// 0.0-4.9  = Not recommended (filtered out)
 func calculateStockScore(stock stockData, history []stockData) float64 {
-	score := 5.0 // Base score
+	score := 5.0 // NEUTRAL BASE SCORE - every stock starts here
 
-	// Target price analysis (40% weight)
-	targetFrom := parsePrice(stock.TargetFrom)
-	targetTo := parsePrice(stock.TargetTo)
+	// 🎯 CRITERION 1: TARGET PRICE ANALYSIS (40% WEIGHT - MOST IMPORTANT)
+	// Why 40%? Price targets directly indicate expected returns
+	targetFrom := parsePrice(stock.TargetFrom) // Parse "$150.00" -> 150.0
+	targetTo := parsePrice(stock.TargetTo)     // Parse "$180.00" -> 180.0
 	if targetFrom > 0 && targetTo > targetFrom {
-		priceIncrease := ((targetTo - targetFrom) / targetFrom) * 100
+		priceIncrease := ((targetTo - targetFrom) / targetFrom) * 100 // Calculate % increase
+		// SCORING TIERS based on price increase magnitude:
 		if priceIncrease > 20 {
-			score += 3.0 // Significant price increase
+			score += 3.0 // MAJOR BOOST: >20% increase (e.g., $100->$125 = 25%)
 		} else if priceIncrease > 10 {
-			score += 2.0 // Moderate price increase
+			score += 2.0 // GOOD BOOST: 10-20% increase (e.g., $100->$115 = 15%)
 		} else if priceIncrease > 5 {
-			score += 1.0 // Small price increase
+			score += 1.0 // SMALL BOOST: 5-10% increase (e.g., $100->$107 = 7%)
 		}
+		// Note: 0-5% increases get no bonus (considered normal volatility)
 	} else if targetTo < targetFrom {
-		score -= 2.0 // Price target lowered
+		score -= 2.0 // PENALTY: Price target was LOWERED (bearish signal)
 	}
 
-	// Rating analysis (30% weight)
+	// ⭐ CRITERION 2: RATING ANALYSIS (30% WEIGHT - SECOND MOST IMPORTANT)
+	// Why 30%? Analyst ratings reflect professional opinion and research
 	if isRatingImprovement(stock.RatingFrom, stock.RatingTo) {
-		score += 2.0 // Rating upgraded
+		score += 2.0 // UPGRADE BONUS: "Hold" -> "Buy" or "Buy" -> "Strong Buy"
 	}
+	// CURRENT RATING BONUSES (based on final rating strength):
 	if isStrongBuyRating(stock.RatingTo) {
-		score += 1.5 // Strong buy rating
+		score += 1.5 // STRONG BUY: Highest confidence rating
 	} else if isBuyRating(stock.RatingTo) {
-		score += 1.0 // Buy rating
+		score += 1.0 // BUY: Positive rating
 	}
+	// Note: Hold/Neutral ratings get no bonus, Sell ratings would get penalty
 
-	// Action analysis (20% weight)
+	// 📊 CRITERION 3: ACTION ANALYSIS (20% WEIGHT - THIRD MOST IMPORTANT)
+	// Why 20%? Actions indicate the direction and confidence of analyst changes
 	action := strings.ToLower(stock.Action)
 	if strings.Contains(action, "raised") || strings.Contains(action, "upgrade") {
-		score += 1.5 // Positive action
+		score += 1.5 // POSITIVE ACTIONS: "target raised", "rating upgraded"
 	} else if strings.Contains(action, "initiated") && isBuyRating(stock.RatingTo) {
-		score += 1.0 // New buy coverage
+		score += 1.0 // NEW COVERAGE: Fresh analyst starts covering with Buy rating
 	} else if strings.Contains(action, "lowered") || strings.Contains(action, "downgrade") {
-		score -= 1.5 // Negative action
+		score -= 1.5 // NEGATIVE ACTIONS: "target lowered", "rating downgraded"
 	}
+	// Examples: "target raised by Goldman Sachs" = +1.5, "target lowered by Morgan Stanley" = -1.5
 
-	// Recent activity bonus (10% weight)
+	// ⏰ CRITERION 4: RECENT ACTIVITY BONUS (10% WEIGHT - TIMING FACTOR)
+	// Why 10%? Recent activity indicates current market relevance
 	if time.Since(stock.CreatedAt).Hours() < 24 {
-		score += 0.5 // Recent activity
+		score += 0.5 // FRESHNESS BONUS: Analysis is less than 24 hours old
 	}
 
-	// Multiple analyst coverage bonus
+	// 📈 BONUS: MULTIPLE ANALYST COVERAGE
+	// More analysts = more confidence in the analysis
 	if len(history) > 2 {
-		score += 0.5 // Multiple analysts covering
+		score += 0.5 // CONSENSUS BONUS: 3+ analysts have opinions on this stock
 	}
 
-	return math.Min(10.0, math.Max(0.0, score)) // Cap between 0-10
+	// FINAL SCORE CAPPING: Ensure score stays within valid range
+	return math.Min(10.0, math.Max(0.0, score)) // Cap between 0-10 (no negative or >10 scores)
 }
 
 // Helper functions
@@ -873,6 +918,22 @@ func parsePrice(priceStr string) float64 {
 	return price
 }
 
+// isRatingImprovement checks if a rating was upgraded
+// 
+// RATING HIERARCHY (1-8 scale, higher = better):
+// 1 = Strong Sell (worst)
+// 2 = Sell  
+// 3 = Underperform/Underweight
+// 4 = Hold
+// 5 = Neutral
+// 6 = Outperform
+// 7 = Buy/Overweight  
+// 8 = Strong Buy (best)
+// 
+// EXAMPLES:
+// "Hold" (4) -> "Buy" (7) = TRUE (improvement)
+// "Buy" (7) -> "Hold" (4) = FALSE (downgrade)
+// "Buy" (7) -> "Strong Buy" (8) = TRUE (improvement)
 func isRatingImprovement(from, to string) bool {
 	ratingScore := map[string]int{
 		"strong sell": 1, "sell": 2, "underperform": 3, "hold": 4, "neutral": 5,
@@ -881,16 +942,19 @@ func isRatingImprovement(from, to string) bool {
 	return ratingScore[strings.ToLower(to)] > ratingScore[strings.ToLower(from)]
 }
 
+// isStrongBuyRating checks if a rating is a strong buy or overweight
 func isStrongBuyRating(rating string) bool {
 	lower := strings.ToLower(rating)
 	return strings.Contains(lower, "strong buy") || strings.Contains(lower, "overweight")
 }
 
+// isBuyRating checks if a rating is a buy or outperform
 func isBuyRating(rating string) bool {
 	lower := strings.ToLower(rating)
 	return strings.Contains(lower, "buy") || strings.Contains(lower, "outperform")
 }
 
+// getRecommendationLevel maps score to recommendation string
 func getRecommendationLevel(score float64) string {
 	if score >= 8.5 {
 		return "Strong Buy"
@@ -903,6 +967,7 @@ func getRecommendationLevel(score float64) string {
 	}
 }
 
+// generateRecommendationReason creates a reason string based on analysis
 func generateRecommendationReason(stock stockData, priceChange, score float64) string {
 	reasons := []string{}
 
@@ -968,6 +1033,7 @@ func (h *StockHandler) GetStockSummary(c *gin.Context) {
 
 // getRecommendationsForSummary gets top recommendations for AI analysis
 func (h *StockHandler) getRecommendationsForSummary() []StockRecommendation {
+	// Query to get recent stock data for analysis
 	query := `
 		SELECT ticker, company, action, brokerage, rating_from, rating_to, 
 		       target_from, target_to, time, created_at
@@ -976,12 +1042,14 @@ func (h *StockHandler) getRecommendationsForSummary() []StockRecommendation {
 		ORDER BY created_at DESC
 		LIMIT 50`
 
+	// Fetch data from database
 	rows, err := h.DB.Query(query)
 	if err != nil {
 		return []StockRecommendation{}
 	}
 	defer rows.Close()
 
+	// Collect stock data
 	var stocks []stockData
 	for rows.Next() {
 		var stock stockData
@@ -1019,6 +1087,7 @@ func (h *StockHandler) generateAISummary(recommendations []StockRecommendation) 
 		"temperature": 0.7,
 	}
 
+	// Marshal request body to JSON
 	reqJSON, _ := json.Marshal(reqBody)
 
 	// Make API request
@@ -1030,6 +1099,7 @@ func (h *StockHandler) generateAISummary(recommendations []StockRecommendation) 
 	req.Header.Set("Content-Type", "application/json")
 	req.Header.Set("Authorization", "Bearer "+os.Getenv("OPENAI_API_KEY"))
 
+	// make HTTP request
 	client := &http.Client{Timeout: 30 * time.Second}
 	resp, err := client.Do(req)
 	if err != nil {
@@ -1052,6 +1122,7 @@ func (h *StockHandler) generateAISummary(recommendations []StockRecommendation) 
 		} `json:"error"`
 	}
 
+	// Decode response body
 	if err := json.NewDecoder(resp.Body).Decode(&openAIResp); err != nil {
 		return "", 0, err
 	}
@@ -1073,11 +1144,13 @@ func (h *StockHandler) buildSummaryPrompt(recommendations []StockRecommendation)
 		return "No stock recommendations available."
 	}
 
+	// Build a concise prompt summarizing the recommendations
 	prompt := "Analyze these stock recommendations and provide a market summary:\n\n"
 
+	// Include top recommendations in the prompt
 	for i, rec := range recommendations {
 		if i >= 10 { // Limit to top 10 for prompt size
-			break
+			break	
 		}
 		prompt += fmt.Sprintf("%d. %s (%s) - %s by %s\n   Rating: %s, Target: %s, Score: %.1f\n   Reason: %s\n\n",
 			i+1, rec.Company, rec.Ticker, rec.Recommendation, rec.Brokerage,
@@ -1101,7 +1174,7 @@ type ChatRequest struct {
 
 // GetStockChat provides AI-powered chat responses about stock market
 // @Summary Chat with AI about stock market
-// @Description Interactive chat with GPT-3.5-turbo for personalized stock analysis, market insights, and investment advice based on current data.
+// @Description Interactive chat with gpt-4.1-nano for personalized stock analysis, market insights, and investment advice based on current data.
 // @Tags ai-analysis
 // @Accept json
 // @Produce json
@@ -1111,8 +1184,10 @@ type ChatRequest struct {
 // @Failure 500 {object} models.GenericErrorResponse "Internal server error or OpenAI API error"
 // @Router /stocks/chat [post]
 func (h *StockHandler) GetStockChat(c *gin.Context) {
+	// Parse request body
 	var req ChatRequest
 
+	// Validate input and decode JSON
 	if err := json.NewDecoder(c.Request.Body).Decode(&req); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid JSON format"})
 		return
@@ -1144,7 +1219,7 @@ func (h *StockHandler) GetStockChat(c *gin.Context) {
 // generateChatResponse calls OpenAI for chat responses
 func (h *StockHandler) generateChatResponse(userMessage, context string) (string, int, error) {
 	reqBody := map[string]interface{}{
-		"model": "gpt-3.5-turbo",
+		"model": "gpt-4.1-nano",
 		"messages": []map[string]string{
 			{
 				"role":    "system",
@@ -1159,8 +1234,10 @@ func (h *StockHandler) generateChatResponse(userMessage, context string) (string
 		"temperature": 0.7,
 	}
 
+	// Marshal request body to JSON
 	reqJSON, _ := json.Marshal(reqBody)
 
+	// configure API request
 	req, err := http.NewRequest("POST", "https://api.openai.com/v1/chat/completions", strings.NewReader(string(reqJSON)))
 	if err != nil {
 		return "", 0, err
@@ -1169,6 +1246,7 @@ func (h *StockHandler) generateChatResponse(userMessage, context string) (string
 	req.Header.Set("Content-Type", "application/json")
 	req.Header.Set("Authorization", "Bearer "+os.Getenv("OPENAI_API_KEY"))
 
+	// make HTTP request
 	client := &http.Client{Timeout: 30 * time.Second}
 	resp, err := client.Do(req)
 	if err != nil {
@@ -1176,6 +1254,7 @@ func (h *StockHandler) generateChatResponse(userMessage, context string) (string
 	}
 	defer resp.Body.Close()
 
+	// Parse response
 	var openAIResp struct {
 		Choices []struct {
 			Message struct {
