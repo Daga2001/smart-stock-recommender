@@ -26,11 +26,21 @@ The system also provides intelligent stock recommendations to help users identif
 
 ## 🛠️ Tech Stack
 
-**Frontend**
-- [Vue 3](https://vuejs.org/) – progressive JavaScript framework  
-- [TypeScript](https://www.typescriptlang.org/) – static typing for safer code  
-- [Pinia](https://pinia.vuejs.org/) – state management for Vue  
-- [Tailwind CSS](https://tailwindcss.com/) – utility-first styling  
+**Frontend (Two Implementations)**
+
+*React Version (Original):*
+- [React 18](https://react.dev/) – component-based JavaScript library
+- [TypeScript](https://www.typescriptlang.org/) – static typing for safer code
+- [Tailwind CSS](https://tailwindcss.com/) – utility-first styling
+- [Radix UI](https://www.radix-ui.com/) – headless UI components
+- [React Query](https://tanstack.com/query) – data fetching and caching
+
+*Vue Version (Newest):*
+- [Vue 3](https://vuejs.org/) – progressive JavaScript framework with Composition API
+- [TypeScript](https://www.typescriptlang.org/) – static typing for safer code
+- [Pinia](https://pinia.vuejs.org/) – state management for Vue
+- [Tailwind CSS](https://tailwindcss.com/) – utility-first styling
+- [Lucide Vue](https://lucide.dev/) – beautiful icon library
 
 **Backend**
 - [Golang](https://go.dev/) – high-performance, statically typed backend  
@@ -43,7 +53,8 @@ The system also provides intelligent stock recommendations to help users identif
 
 **Testing**
 - Go testing framework for backend logic  
-- React Testing Library / Vitest for frontend components  
+- React Testing Library / Vitest for React frontend
+- Vitest for Vue frontend components  
 
 ---
 
@@ -96,22 +107,23 @@ The system also provides intelligent stock recommendations to help users identif
    go run main.go
    ```
 
-3. **🌐 Setup frontend (Vue 3)**
-  Navigate to frontend repository and install dependencies:
+3. **🌐 Setup frontend**
+
+   **Option A: React Frontend (Original)**
    ```bash
    cd frontend
    npm install
+   npm run dev  # Runs on http://localhost:3000
    ```
    
-   Create `frontend/.env` file:
-   ```env
-   VITE_STOCK_API_TOKEN=your-external-api-token
-   ```
-   
-   Run the server:
+   **Option B: Vue 3 Frontend (Modern)**
    ```bash
-   npm run dev
+   cd frontend-vue
+   npm install
+   npm run dev  # Runs on http://localhost:3000
    ```
+   
+   *Note: Both frontends connect to the same Go backend and offer identical functionality*
    
 4. **🗄️ Database (CockroachDB)**
    - Database automatically creates tables on first run
