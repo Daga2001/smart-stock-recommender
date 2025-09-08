@@ -126,7 +126,7 @@ export const AIAssistant = () => {
             AI Market Summary
           </CardTitle>
           <CardDescription>
-            AI-powered analysis of current market trends and recommendations
+            AI analysis of the 50 most recent analyst ratings.
           </CardDescription>
         </CardHeader>
         <CardContent>

@@ -1266,14 +1266,14 @@ func (h *StockHandler) generateAISummary(recommendations []StockRecommendation) 
 		"messages": []map[string]string{
 			{
 				"role":    "system",
-				"content": "You are a seasoned Wall Street equity research analyst with 15+ years of experience in fundamental analysis and market strategy. Analyze the provided stock data with the expertise of someone who has navigated multiple market cycles. Focus on: sector rotation patterns, valuation metrics implications, institutional sentiment shifts, and macroeconomic factors affecting target price revisions. Provide actionable insights for institutional investors. Keep analysis under 200 words but make every word count.",
+				"content": "You are a Wall Street equity research analyst. Analyze the stock data and provide a brief market summary focusing on: 1) Top Rating Actions - highlight stocks upgraded/initiated with Buy/Outperform ratings, 2) Target Price Increases - emphasize significant target hikes with high upside potential, 3) Reinforced Confidence - note reiterated Buy/Outperform ratings showing continued analyst confidence, 4) Negative Signals - briefly flag target cuts or underweight ratings, 5) Brokerage Reputation - mention reputable firms backing stocks. Format: Brief sentences with specific stock examples and price targets. Keep under 150 words, focus on actionable insights.",
 			},
 			{
 				"role":    "user",
 				"content": prompt,
 			},
 		},
-		"max_tokens":  250,
+		"max_tokens":  200,
 		"temperature": 0.7,
 	}
 
@@ -1334,20 +1334,19 @@ func (h *StockHandler) buildSummaryPrompt(recommendations []StockRecommendation)
 		return "No stock recommendations available."
 	}
 
-	// Build expert-level prompt for institutional analysis
-	prompt := "EQUITY RESEARCH BRIEF - Analyze the following analyst actions and provide institutional-grade market insights:\n\n"
+	// Build focused prompt for key insights
+	prompt := "ANALYST ACTIONS SUMMARY - Provide brief market insights with specific examples:\n\n"
 
-	// Include top 10 recommendations with detailed context
+	// Include top recommendations with key details
 	for i, rec := range recommendations {
-		if i >= 10 { // Focus on top 10 for comprehensive analysis
+		if i >= 8 { // Focus on top 8 for concise analysis
 			break	
 		}
-		prompt += fmt.Sprintf("%d. %s (%s) - %s [Score: %.1f/10]\n   Brokerage: %s | Rating: %s | Target: %s\n   Catalyst: %s\n\n",
-			i+1, rec.Company, rec.Ticker, rec.Recommendation, rec.Score, rec.Brokerage,
-			rec.CurrentRating, rec.TargetPrice, rec.Reason)
+		prompt += fmt.Sprintf("%s (%s): %s by %s - Target: %s | %s\n",
+			rec.Ticker, rec.Company, rec.CurrentRating, rec.Brokerage, rec.TargetPrice, rec.Reason)
 	}
 
-	prompt += "ANALYSIS FRAMEWORK: Assess sector rotation dynamics, valuation expansion/contraction themes, earnings revision trends, and institutional positioning implications. Consider current market regime and provide tactical allocation insights."
+	prompt += "\nFocus on: Top upgrades/initiations, significant target increases, reiterated confidence, negative signals, and reputable brokerage backing. Be specific with stock examples and price targets."
 	return prompt
 }
 
