@@ -38,6 +38,7 @@ func main() {
 
 	// Initialize handlers
 	stockHandler := handlers.NewStockHandler(db)
+	securityHandler := handlers.NewSecurityHandler()
 
 	// Setup router
 	// gin.SetMode(gin.ReleaseMode)
@@ -63,6 +64,7 @@ func main() {
 	// API Routes from the Go Server
 	api := r.Group("/api")
 	{
+		// Stock-related endpoints
 		api.POST("/stocks", stockHandler.GetStocksByPage)
 		api.POST("/stocks/bulk", stockHandler.GetStocksBulk)
 		api.POST("/stocks/list", stockHandler.GetStockRatings)
@@ -73,6 +75,14 @@ func main() {
 		api.GET("/stocks/summary", stockHandler.GetStockSummary)
 		api.POST("/stocks/chat", stockHandler.GetStockChat)
 		api.GET("/stocks/metrics", stockHandler.GetStockMetrics)
+
+		// Security demonstration endpoints
+		security := api.Group("/security")
+		{
+			security.POST("/timing-attack-login", securityHandler.TimingAttackLogin)
+			security.POST("/bulk-timing-attack", securityHandler.BulkTimingAttack)
+			security.GET("/timing-attack-info", securityHandler.GetTimingAttackInfo)
+		}
 	}
 
 	// define the port to run the server on
