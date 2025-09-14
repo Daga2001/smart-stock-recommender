@@ -79,9 +79,7 @@ func main() {
 		// Security demonstration endpoints
 		security := api.Group("/security")
 		{
-			security.POST("/timing-attack-login", securityHandler.TimingAttackLogin)
 			security.POST("/bulk-timing-attack", securityHandler.BulkTimingAttack)
-			security.GET("/timing-attack-info", securityHandler.GetTimingAttackInfo)
 		}
 	}
 

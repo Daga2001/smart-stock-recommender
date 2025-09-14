@@ -248,6 +248,8 @@ func (h *SecurityHandler) performCharacterTimingAttack(basePassword string) map[
 	// If password is empty, test all single characters
 	if basePassword == "" {
 		discoveredPatterns = append(discoveredPatterns, "Empty password - testing all single characters")
+		discoveredPatterns = append(discoveredPatterns, "NOTE: Client response times include network latency and are unreliable")
+		discoveredPatterns = append(discoveredPatterns, "Focus on 'server duration' - this is the actual server-side processing time")
 		for _, char := range charset {
 			result := h.performPasswordOnlyTimingAttack(string(char))
 			allResults = append(allResults, result)
@@ -257,6 +259,9 @@ func (h *SecurityHandler) performCharacterTimingAttack(basePassword string) map[
 			time.Sleep(20 * time.Millisecond)
 		}
 	} else {
+		discoveredPatterns = append(discoveredPatterns, "NOTE: Client response times include network latency and are unreliable")
+		discoveredPatterns = append(discoveredPatterns, "Focus on 'server duration' - this is the actual server-side processing time")
+		
 		// Test base password first
 		baseResult := h.performPasswordOnlyTimingAttack(basePassword)
 		allResults = append(allResults, baseResult)
@@ -295,15 +300,23 @@ func (h *SecurityHandler) performCharacterTimingAttack(basePassword string) map[
 	}
 
 	if len(bestPasswords) > 0 {
+		discoveredPatterns = append(discoveredPatterns, "")
+		discoveredPatterns = append(discoveredPatterns, "=== TIMING ATTACK ANALYSIS ===")
+		discoveredPatterns = append(discoveredPatterns, "Server duration is the key metric - it measures actual password comparison time")
+		discoveredPatterns = append(discoveredPatterns, "Higher server duration indicates the password took longer to process (potential partial match)")
+		discoveredPatterns = append(discoveredPatterns, "Client response time varies due to network conditions and should be ignored")
+		discoveredPatterns = append(discoveredPatterns, "")
 		if len(bestPasswords) == 1 {
 			discoveredPatterns = append(discoveredPatterns,
-				fmt.Sprintf("Best password by server duration: '%s' (server duration: %dms)",
+				fmt.Sprintf("🎯 BEST CANDIDATE: '%s' (server duration: %dms)",
 					bestPasswords[0], maxServerDuration))
 		} else {
 			discoveredPatterns = append(discoveredPatterns,
-				fmt.Sprintf("Best passwords by server duration (%d found): %v (server duration: %dms)",
+				fmt.Sprintf("🎯 BEST CANDIDATES (%d found): %v (server duration: %dms)",
 					len(bestPasswords), bestPasswords, maxServerDuration))
 		}
+		discoveredPatterns = append(discoveredPatterns, 
+			fmt.Sprintf("These passwords caused the server to spend %dms processing vs 0ms for incorrect ones", maxServerDuration))
 	}
 
 	bestPassword := ""
